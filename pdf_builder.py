@@ -181,53 +181,130 @@ def _build_subject_overview(subject, s):
     return elems
 
 
-def _build_price_recommendation(subject, comps, price_low, price_high, price_notes, s):
+def _build_price_recommendation(subject, comps, price_low, price_high, price_rec, price_notes, s):
     elems = _section_header("Price Recommendation", s)
 
-    mid = int((price_low + price_high) / 2)
+    # ── Visual price scale ────────────────────────────────────────────────────
+    # Drawn as a ReportLab Drawing: gradient bar + arrow marker
+    from reportlab.graphics.shapes import Drawing, Rect, Polygon, Line, String
+    from reportlab.graphics import renderPDF
 
-    flat_data = [[
-        Table([[Paragraph("Recommended Low", s["price_label"])],
-               [Paragraph(f"${price_low:,}", s["price_big"])]], colWidths=[2.1*inch]),
-        Table([[Paragraph("Target List Price", s["price_label_white"])],
-               [Paragraph(f"${mid:,}", s["price_big_white"])]], colWidths=[2.1*inch]),
-        Table([[Paragraph("Recommended High", s["price_label"])],
-               [Paragraph(f"${price_high:,}", s["price_big"])]], colWidths=[2.1*inch]),
-    ]]
+    bar_w = 6.0 * inch
+    bar_h = 28
+    draw_h = 95
+    d = Drawing(bar_w, draw_h)
 
-    price_tbl = Table(flat_data, colWidths=[2.2*inch, 2.2*inch, 2.2*inch])
-    price_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), STEEL),
-        ("BACKGROUND", (1, 0), (1, 0), NAVY),
-        ("BACKGROUND", (2, 0), (2, 0), STEEL),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 12),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-    ]))
-    elems.append(price_tbl)
-    elems.append(Spacer(1, 10))
+    # Gradient bar segments (low=steel → mid=pink → high=navy)
+    segments = 60
+    seg_w = bar_w / segments
+    for i in range(segments):
+        t = i / segments
+        # interpolate STEEL(#EEF1F4) → PINK(#E91E63) → NAVY(#173348)
+        if t < 0.5:
+            t2 = t * 2
+            r = int(0xEE + (0xE9 - 0xEE) * t2)
+            g = int(0xF1 + (0x1E - 0xF1) * t2)
+            b = int(0xF4 + (0x63 - 0xF4) * t2)
+        else:
+            t2 = (t - 0.5) * 2
+            r = int(0xE9 + (0x17 - 0xE9) * t2)
+            g = int(0x1E + (0x33 - 0x1E) * t2)
+            b = int(0x63 + (0x48 - 0x63) * t2)
+        seg_color = colors.Color(r/255, g/255, b/255)
+        d.add(Rect(i * seg_w, draw_h - bar_h - 30, seg_w + 0.5, bar_h,
+                   fillColor=seg_color, strokeColor=None))
 
-    # High price note
-    high_note_style = ParagraphStyle(
-        "high_note", fontName="Times-Italic", fontSize=9,
-        textColor=NAVY, backColor=STEEL,
-        leftIndent=10, rightIndent=10,
-        spaceBefore=4, spaceAfter=8, leading=13, borderPad=6,
-    )
-    elems.append(Paragraph(
-        f"<b>To achieve the high end of ${price_high:,}:</b>  The property must be in Instagram-worthy, "
-        "top-notch condition — full inspection reports available and on hand, all smoke and carbon "
-        "monoxide detectors up to date, exceptionally clean throughout, and absolutely no smell of "
-        "animals or pets.",
-        high_note_style,
+    # Arrow marker at recommended price position
+    if price_high > price_low:
+        ratio = (price_rec - price_low) / (price_high - price_low)
+    else:
+        ratio = 0.5
+    ratio = max(0.02, min(0.98, ratio))
+    arrow_x = ratio * bar_w
+    arrow_y_base = draw_h - bar_h - 30  # bottom of bar
+    arrow_tip_y = arrow_y_base - 18
+
+    # Triangle arrow pointing up into the bar
+    d.add(Polygon(
+        [arrow_x - 8, arrow_tip_y,
+         arrow_x + 8, arrow_tip_y,
+         arrow_x, arrow_y_base],
+        fillColor=colors.HexColor("#173348"),
+        strokeColor=None,
     ))
-    elems.append(Spacer(1, 8))
+    # Vertical stem
+    d.add(Line(arrow_x, arrow_tip_y - 12, arrow_x, arrow_tip_y,
+               strokeColor=colors.HexColor("#173348"), strokeWidth=2))
 
+    # Recommended price label below arrow
+    rec_label = String(arrow_x, arrow_tip_y - 24,
+                       f"Our Recommendation: ${price_rec:,}",
+                       fontName="Times-Bold", fontSize=9,
+                       fillColor=colors.HexColor("#173348"),
+                       textAnchor="middle")
+    d.add(rec_label)
+
+    # Low label
+    d.add(String(0, draw_h - bar_h - 14,
+                 f"${price_low:,}",
+                 fontName="Times-Roman", fontSize=8,
+                 fillColor=colors.HexColor("#555555"), textAnchor="start"))
+    # High label
+    d.add(String(bar_w, draw_h - bar_h - 14,
+                 f"${price_high:,}",
+                 fontName="Times-Roman", fontSize=8,
+                 fillColor=colors.HexColor("#555555"), textAnchor="end"))
+
+    elems.append(d)
+    elems.append(Spacer(1, 6))
+
+    # ── Condition notes on low / high ends ───────────────────────────────────
+    condition_style = ParagraphStyle(
+        "cond", fontName="Times-Italic", fontSize=8,
+        textColor=colors.HexColor("#555555"), leading=11,
+    )
+    cond_data = [[
+        Paragraph(
+            f"<b>${price_low:,} — As-Is:</b> Property sold in current condition, "
+            "not cleaned out, not in photo-ready condition.",
+            condition_style),
+        Paragraph(
+            f"<b>${price_high:,} — Instagram-Worthy:</b> Top-notch condition, full inspection "
+            "reports on hand, smoke detectors up to date, exceptionally clean, no smell of animals.",
+            condition_style),
+    ]]
+    cond_tbl = Table(cond_data, colWidths=[3.1*inch, 3.4*inch])
+    cond_tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elems.append(cond_tbl)
+    elems.append(Spacer(1, 12))
+
+    # ── Agent pricing notes ───────────────────────────────────────────────────
     if price_notes and price_notes.strip():
         elems.append(Paragraph(
             f"<b>Agent Pricing Notes:</b>  <i>{price_notes.strip()}</i>", s["body"]))
+        elems.append(Spacer(1, 8))
 
+    # ── Firm philosophy note ──────────────────────────────────────────────────
+    philosophy_style = ParagraphStyle(
+        "philosophy", fontName="Times-Italic", fontSize=9,
+        textColor=NAVY, backColor=colors.HexColor("#FFF8FB"),
+        leftIndent=10, rightIndent=10,
+        spaceBefore=4, spaceAfter=4, leading=14, borderPad=8,
+    )
+    elems.append(Paragraph(
+        "We pride ourselves in our firm that we don't attempt to inflate the value to win the listing. "
+        "This is where we earnestly feel as though the property will settle on the market. We are not "
+        "perfect and this is not an exact science, but we want to work together with you as a team. "
+        "The more you put in, the more we can help you too. We love what we do and we want you to have "
+        "as seamless of an experience as possible!",
+        philosophy_style,
+    ))
     elems.append(Spacer(1, 12))
     return elems
 
@@ -392,8 +469,8 @@ def _make_page_template(canvas, doc, logo_path):
 # ── Master Build ──────────────────────────────────────────────────────────────
 
 def _build_cma_pdf_bytes(subject, comps, recommendations,
-                          price_low, price_high, price_notes,
-                          logo_path, anr_url=None) -> bytes:
+                          price_low, price_high, price_rec,
+                          price_notes, logo_path, anr_url=None) -> bytes:
     """Render the CMA content pages as a PDF and return bytes."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -429,7 +506,7 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
         story.append(_divider())
 
     # Price recommendation
-    story += _build_price_recommendation(subject, comps, price_low, price_high, price_notes, s)
+    story += _build_price_recommendation(subject, comps, price_low, price_high, price_rec, price_notes, s)
 
     def _footer(canvas, doc):
         _make_page_template(canvas, doc, logo_path)
@@ -440,7 +517,8 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
 
 
 def merge_cma_pdf(subject, comps, recommendations,
-                   price_low, price_high, price_notes,
+                   price_low, price_high, price_rec,
+                   price_notes,
                    logo_path="hall_collins_logo.png",
                    anr_url=None,
                    supplemental_pdf_bytes=None,
@@ -469,8 +547,8 @@ def merge_cma_pdf(subject, comps, recommendations,
     # ── 2. CMA Content ────────────────────────────────────────────────────────
     cma_bytes = _build_cma_pdf_bytes(
         subject, comps, recommendations,
-        price_low, price_high, price_notes,
-        logo_path, anr_url=None,
+        price_low, price_high, price_rec,
+        price_notes, logo_path, anr_url=None,
     )
     cma_reader = PdfReader(io.BytesIO(cma_bytes))
     for page in cma_reader.pages:

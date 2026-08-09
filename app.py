@@ -135,6 +135,7 @@ def _session_to_dict():
         "subject": st.session_state.get("subject_data", {}),
         "price_low": st.session_state.get("price_low", 400000),
         "price_high": st.session_state.get("price_high", 450000),
+        "price_rec": st.session_state.get("price_rec", 425000),
         "price_notes": st.session_state.get("price_notes", ""),
         "agent_notes": st.session_state.get("agent_notes", ""),
         "recommendations": {
@@ -154,7 +155,7 @@ def _load_session_from_dict(d: dict):
     if "subject" in d:
         st.session_state.subject_data = d["subject"]
         st.session_state.subject_searched = bool(d["subject"].get("street_address"))
-    for key in ("price_low", "price_high", "price_notes", "agent_notes"):
+    for key in ("price_low", "price_high", "price_rec", "price_notes", "agent_notes"):
         if key in d:
             st.session_state[key] = d[key]
     for rec_key, val in d.get("recommendations", {}).items():
@@ -465,9 +466,26 @@ st.markdown('<div class="section-label">Step 2 — Price Recommendation</div>', 
 
 p1, p2 = st.columns(2)
 with p1:
-    price_low = st.number_input("Recommended Low ($)", min_value=0, value=400000, step=5000, key="price_low")
+    price_low = st.number_input("Lowest Price — As-Is ($)", min_value=0, value=400000, step=5000, key="price_low")
 with p2:
-    price_high = st.number_input("Recommended High ($)", min_value=0, value=450000, step=5000, key="price_high")
+    price_high = st.number_input("Highest Price — Instagram-Worthy ($)", min_value=0, value=450000, step=5000, key="price_high")
+
+# Recommended price slider between low and high
+_slider_min = int(price_low) if price_low else 0
+_slider_max = int(price_high) if price_high else _slider_min + 50000
+_slider_default = st.session_state.get("price_rec", int((_slider_min + _slider_max) / 2))
+_slider_default = max(_slider_min, min(_slider_max, _slider_default))
+
+price_rec = st.slider(
+    "📍 Our Recommended List Price",
+    min_value=_slider_min,
+    max_value=_slider_max if _slider_max > _slider_min else _slider_min + 1,
+    value=_slider_default,
+    step=1000,
+    key="price_rec",
+    help="Drag to set where you recommend the property should list on the scale between low and high.",
+)
+st.caption(f"Recommended: **${price_rec:,}**  |  Low: ${price_low:,}  |  High: ${price_high:,}")
 
 price_notes = st.text_area(
     "Agent Pricing Notes (optional)",
@@ -693,6 +711,7 @@ if generate:
                 recommendations=recs,
                 price_low=int(price_low),
                 price_high=int(price_high),
+                price_rec=int(price_rec),
                 price_notes=price_notes,
                 logo_path="hall_collins_logo.png",
                 anr_url=None,
