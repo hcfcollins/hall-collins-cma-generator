@@ -380,6 +380,38 @@ def _build_agent_notes(subject, s):
     return elems
 
 
+def _build_anr_section(anr_url, s):
+    """Build the ANR map reference section."""
+    if not anr_url:
+        return []
+    elems = _section_header("Vermont ANR Natural Resource Map", s)
+    elems.append(Paragraph(
+        "The Vermont Agency of Natural Resources (ANR) Natural Resource Atlas provides detailed "
+        "GIS mapping of wetlands, floodplains, soil types, conserved lands, Act 250 districts, "
+        "and other environmental data relevant to this property.",
+        s["body"],
+    ))
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph("<b>ANR Atlas Link for this property:</b>", s["label"]))
+    elems.append(Spacer(1, 4))
+
+    # Render URL in a shaded box so it stands out
+    url_style = ParagraphStyle(
+        "anr_url", fontName="Courier", fontSize=8, textColor=NAVY,
+        backColor=STEEL, leftIndent=10, rightIndent=10,
+        spaceBefore=4, spaceAfter=4, leading=12,
+        borderPad=6,
+    )
+    elems.append(Paragraph(anr_url, url_style))
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph(
+        "<i>Open this link in any web browser to view the interactive ANR map for the subject property.</i>",
+        s["caption"],
+    ))
+    elems.append(Spacer(1, 12))
+    return elems
+
+
 # ── Page Template (header/footer on every page) ───────────────────────────────
 
 def _make_page_template(canvas, doc, logo_path):
@@ -411,7 +443,8 @@ def _make_page_template(canvas, doc, logo_path):
 # ── Master Build ──────────────────────────────────────────────────────────────
 
 def _build_cma_pdf_bytes(subject, comps, recommendations,
-                          price_low, price_high, price_notes, logo_path) -> bytes:
+                          price_low, price_high, price_notes,
+                          logo_path, anr_url=None) -> bytes:
     """Render the CMA content pages as a PDF and return bytes."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -444,6 +477,12 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
         story += agent_notes_elems
         story.append(_divider())
 
+    # ANR Map section
+    anr_elems = _build_anr_section(anr_url, s)
+    if anr_elems:
+        story += anr_elems
+        story.append(_divider())
+
     # Price recommendation
     story += _build_price_recommendation(subject, comps, price_low, price_high, price_notes, s)
 
@@ -458,12 +497,14 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
 def merge_cma_pdf(subject, comps, recommendations,
                    price_low, price_high, price_notes,
                    logo_path="hall_collins_logo.png",
+                   anr_url=None,
                    supplemental_pdf_bytes=None) -> bytes:
     """
     Build and merge the final CMA PDF:
       1. HC Cover Page  (always fixed — HC - CMA Cover Page Summer Pic.pdf)
       2. CMA Content    (built with ReportLab)
-      3. Supplemental   (uploaded PDF, pages 1–2 stripped), if provided
+      3. ANR Map section (printed link, if anr_url provided)
+      4. Supplemental   (uploaded PDF, pages 1–2 stripped), if provided
 
     Returns merged PDF as bytes.
     """
@@ -479,16 +520,17 @@ def merge_cma_pdf(subject, comps, recommendations,
     for page in cover_reader.pages:
         writer.add_page(page)
 
-    # ── 2. CMA Content ────────────────────────────────────────────────────────
+    # ── 2. CMA Content (with ANR section) ─────────────────────────────────────
     cma_bytes = _build_cma_pdf_bytes(
         subject, comps, recommendations,
-        price_low, price_high, price_notes, logo_path,
+        price_low, price_high, price_notes,
+        logo_path, anr_url=anr_url,
     )
     cma_reader = PdfReader(io.BytesIO(cma_bytes))
     for page in cma_reader.pages:
         writer.add_page(page)
 
-    # ── 3. Supplemental PDF (strip pages 1 & 2) ───────────────────────────────
+    # ── 3. Other CMA PDF (strip pages 1 & 2) ─────────────────────────────────
     if supplemental_pdf_bytes:
         supp_reader = PdfReader(io.BytesIO(supplemental_pdf_bytes))
         supp_pages = list(supp_reader.pages)

@@ -239,6 +239,102 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # ── Edit Agent Notes from Existing PDF ────────────────────────────────────
+    st.markdown("---")
+    st.markdown(
+        f'<div style="font-family:Georgia;color:{NAVY};font-size:1.1rem;'
+        f'font-weight:700;border-bottom:2px solid {PINK};padding-bottom:6px;'
+        f'margin-bottom:12px;">✏️ Edit Agent Notes in PDF</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "Upload a previously generated CMA PDF to extract and edit the "
+        "Agent Notes, then regenerate the PDF with your changes.",
+        unsafe_allow_html=False,
+    )
+
+    uploaded_cma_pdf = st.file_uploader(
+        "Upload existing CMA PDF",
+        type=["pdf"],
+        key="edit_pdf_upload",
+        label_visibility="collapsed",
+    )
+
+    if uploaded_cma_pdf is not None:
+        try:
+            from pypdf import PdfReader as _PR
+            import io as _io
+            raw = uploaded_cma_pdf.read()
+            reader = _PR(_io.BytesIO(raw))
+
+            # Walk every page and collect all text
+            full_text = "\n".join(
+                page.extract_text() or "" for page in reader.pages
+            )
+
+            # Extract the Agent Notes section — look for the header we write
+            # in pdf_builder.py ("AGENT NOTES") and grab text until the next
+            # all-caps section header or end of document.
+            import re as _re
+            # Match everything after "AGENT NOTES" up to the next ALLCAPS header
+            # or end of string
+            pattern = _re.compile(
+                r"AGENT NOTES\s*\n(.*?)(?=\n[A-Z][A-Z\s]{4,}\n|\Z)",
+                _re.DOTALL | _re.IGNORECASE,
+            )
+            match = pattern.search(full_text)
+            if match:
+                extracted_notes = match.group(1).strip()
+            else:
+                # Fallback: look for any lines after "Agent Notes" heading
+                lines = full_text.splitlines()
+                notes_lines = []
+                capturing = False
+                for line in lines:
+                    if _re.match(r"^AGENT NOTES\s*$", line.strip(), _re.IGNORECASE):
+                        capturing = True
+                        continue
+                    if capturing:
+                        # Stop at next section header (all-caps line 5+ chars)
+                        if _re.match(r"^[A-Z][A-Z\s]{4,}$", line.strip()):
+                            break
+                        notes_lines.append(line)
+                extracted_notes = "\n".join(notes_lines).strip()
+
+            if extracted_notes:
+                st.success("✅ Agent Notes extracted from PDF.")
+            else:
+                extracted_notes = ""
+                st.info(
+                    "ℹ️ No Agent Notes section found in this PDF. "
+                    "You can type new notes below and regenerate."
+                )
+
+            # Show editable text area pre-filled with extracted notes
+            edited_notes = st.text_area(
+                "Edit Agent Notes:",
+                value=extracted_notes,
+                height=200,
+                key="sidebar_edited_notes",
+            )
+
+            if st.button("✅ Apply to Session & Regenerate", use_container_width=True, key="apply_notes_btn"):
+                # Push edited notes into session state so the main form picks them up
+                st.session_state.subject_data["agent_notes"] = edited_notes
+                st.session_state["agent_notes_prefill"] = edited_notes
+                # Store the raw PDF bytes so pdf_builder can re-use the same
+                # supplemental data if needed
+                st.session_state["_edited_notes"] = edited_notes
+                st.session_state["_edit_pdf_bytes"] = raw
+                st.success(
+                    "✅ Notes updated! Scroll down and click "
+                    "**Generate CMA PDF** to rebuild the document."
+                )
+                st.rerun()
+
+        except Exception as e:
+            st.error(f"Could not read PDF: {e}")
+
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 logo_b64 = get_logo_b64()
@@ -476,8 +572,19 @@ st.markdown("---")
 st.markdown('<div class="section-label">Step 5 — Agent Notes</div>', unsafe_allow_html=True)
 st.markdown("*Your personal notes — these will appear as a dedicated section in the final PDF.*")
 
+# Pre-fill from sidebar PDF extraction if available
+_notes_prefill = (
+    st.session_state.get("agent_notes_prefill")
+    or st.session_state.subject_data.get("agent_notes")
+    or ""
+)
+# Clear the prefill trigger after consuming it so it doesn't fight edits
+if "agent_notes_prefill" in st.session_state:
+    del st.session_state["agent_notes_prefill"]
+
 agent_notes = st.text_area(
     "Agent Notes",
+    value=_notes_prefill,
     placeholder=(
         "e.g. The sellers are motivated and flexible on closing date. "
         "The basement has been freshly waterproofed. "
@@ -528,16 +635,17 @@ if show_map:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 7 — SUPPLEMENTAL PDF UPLOAD
+# STEP 7 — OTHER CMA FORMAT PDF (strip first 2 pages)
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 7 — Supplemental PDF (Optional)</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 7 — Attach Other CMA Report (Optional)</div>', unsafe_allow_html=True)
 st.markdown(
-    "Upload any additional PDF to append to the end of the CMA. "
-    "**The first 2 pages will be automatically removed** — only the remaining pages will be included."
+    "Upload your other CMA format PDF here — e.g. from your MLS or third-party CMA tool. "
+    "**Pages 1 and 2 will be automatically stripped** (cover/title pages) and the rest will be "
+    "appended to the end of your Hall Collins CMA."
 )
 
 supplemental_pdf_file = st.file_uploader(
-    "Upload Supplemental PDF",
+    "Upload other CMA PDF",
     type=["pdf"],
     key="supplemental_pdf",
     label_visibility="collapsed",
@@ -555,7 +663,7 @@ if supplemental_pdf_file:
         if pages_to_include > 0:
             st.success(
                 f"✅ **{supplemental_pdf_file.name}** — {total_pages} pages total. "
-                f"Pages 1–2 will be removed; **{pages_to_include} pages** will be appended to the CMA."
+                f"Pages 1–2 (cover) will be removed; **{pages_to_include} pages** will be appended."
             )
         else:
             st.warning(
@@ -568,6 +676,58 @@ if supplemental_pdf_file:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
+# STEP 8 — ANR MAP
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="section-label">Step 8 — Vermont ANR Natural Resource Map</div>', unsafe_allow_html=True)
+st.markdown(
+    "The Vermont ANR (Agency of Natural Resources) Atlas shows wetlands, floodplains, soil types, "
+    "conservation land, and other natural resource data — very useful for land and rural properties. "
+    "The link will be included in the PDF. You can also preview it here."
+)
+
+# Build / retrieve ANR URL from subject data
+_anr_url = st.session_state.subject_data.get("anr_url")
+
+# Manual lat/lng override if not yet geocoded
+anr_col1, anr_col2 = st.columns([3, 1])
+with anr_col1:
+    anr_manual_address = st.text_input(
+        "Generate ANR link for address (auto-fills from subject property):",
+        value=st.session_state.subject_data.get("address", ""),
+        key="anr_address_input",
+        placeholder="123 Maple Street, Woodstock, VT 05091",
+    )
+with anr_col2:
+    st.markdown("<br>", unsafe_allow_html=True)
+    gen_anr = st.button("🗺️ Get ANR Map Link", key="gen_anr_btn", use_container_width=True)
+
+if gen_anr and anr_manual_address:
+    with st.spinner("Looking up coordinates for ANR map…"):
+        from property_research import search_vermont_anr_map
+        anr_result = search_vermont_anr_map(anr_manual_address)
+        _anr_url = anr_result.get("anr_atlas_url")
+        if _anr_url:
+            st.session_state.subject_data["anr_url"] = _anr_url
+            st.session_state.subject_data["lat"] = anr_result.get("lat")
+            st.session_state.subject_data["lng"] = anr_result.get("lng")
+
+if _anr_url:
+    st.success(f"✅ ANR Map link ready — will be included in the PDF.")
+    st.markdown(f"**🔗 Open in browser:** [{_anr_url}]({_anr_url})")
+
+    # Embed the ANR map as an iframe preview
+    with st.expander("🗺️ Preview ANR Map", expanded=False):
+        st.components.v1.iframe(_anr_url, height=500, scrolling=True)
+        st.caption(
+            "Vermont ANR Natural Resource Atlas — shows wetlands, floodplains, "
+            "soils, conserved lands, and more. Open the link above for full functionality."
+        )
+elif st.session_state.subject_data.get("address"):
+    st.info("ℹ️ Click **Get ANR Map Link** to generate the Vermont ANR Atlas link for this property.")
+
+st.markdown("---")
+
+# ══════════════════════════════════════════════════════════════════════════════
 # GENERATE PDF
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">Generate CMA Report</div>', unsafe_allow_html=True)
@@ -575,8 +735,9 @@ st.markdown('<div class="section-label">Generate CMA Report</div>', unsafe_allow
 st.info(
     "📋 **What gets generated:**\n"
     "1. **HC Cover Page** (always included automatically)\n"
-    "2. **CMA Content** — property details, comparables, map, price recommendation, your notes & recommendations\n"
-    "3. **Supplemental Pages** — your uploaded PDF minus its first 2 pages *(if uploaded)*",
+    "2. **CMA Content** — property details, comparables, price recommendation, recommendations & notes\n"
+    "3. **ANR Map link** — printed in the PDF for easy reference *(if generated)*\n"
+    "4. **Other CMA Report** — your uploaded PDF minus its first 2 pages *(if uploaded)*",
     icon=None,
 )
 
@@ -646,6 +807,7 @@ if generate:
                 price_high=int(price_high),
                 price_notes=price_notes,
                 logo_path="hall_collins_logo.png",
+                anr_url=sd.get("anr_url"),
                 supplemental_pdf_bytes=supp_bytes,
             )
             st.session_state.pdf_bytes = pdf_bytes
