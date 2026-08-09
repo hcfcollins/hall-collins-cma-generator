@@ -496,6 +496,18 @@ def _build_research_notes(doc: Document, subject: dict, recommendations: list):
                 body_p.paragraph_format.left_indent = Inches(0.3)
                 doc.add_paragraph()
 
+    # Agent Notes
+    agent_notes = subject.get("agent_notes", "").strip()
+    if agent_notes:
+        _add_heading(doc, "Agent Notes", level=2)
+        notes_p = doc.add_paragraph()
+        run = notes_p.add_run(agent_notes)
+        run.font.name = "Georgia"
+        run.font.size = Pt(10)
+        run.font.color.rgb = DARK_GRAY
+        notes_p.paragraph_format.left_indent = Inches(0.3)
+        doc.add_paragraph()
+
     doc.add_paragraph()
 
 

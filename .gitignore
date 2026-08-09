@@ -1,8 +1,30 @@
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
 *.egg-info/
+
+# Virtual environments
 .env
 .venv/
 venv/
-*.DS_Store
+env/
+
+# Secrets
 .streamlit/secrets.toml
+
+# macOS
+.DS_Store
+._*
+
+# VS Code (keep tasks.json for launch config, ignore personal settings)
+.vscode/settings.json
+.vscode/launch.json
+
+# Generated CMA output files — don't track client documents
+CMA_*.pdf
+CMA_*.docx
+
+# Temp files
+*.tmp
+*.log

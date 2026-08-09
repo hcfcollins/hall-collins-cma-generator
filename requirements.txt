@@ -9,3 +9,5 @@ geopy>=2.4.0
 lxml>=5.0.0
 pandas>=2.0.0
 python-dotenv>=1.0.0
+pypdf>=4.0.0
+docx2pdf>=0.1.8

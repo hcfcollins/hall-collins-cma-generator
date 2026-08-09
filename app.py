@@ -14,6 +14,7 @@ from io import BytesIO
 from property_research import get_property_data, geocode_address
 from map_builder import build_comparison_map
 from doc_builder import build_cma_document
+from pdf_builder import merge_cma_pdf
 
 # ── App Config ─────────────────────────────────────────────────────────────────
 APP_VERSION = "1.0.0"
@@ -127,6 +128,7 @@ defaults = {
     "subject_searched": False,
     "comp_searched": [False, False, False],
     "doc_bytes": None,
+    "pdf_bytes": None,
     "map_html": None,
 }
 for k, v in defaults.items():
@@ -194,14 +196,13 @@ if search_subj and subj_street and subj_city:
     }
     st.session_state.subject_searched = True
 
-    if zillow.get("error"):
-        st.warning(f"⚠️ Zillow search note: {zillow['error']}. Please fill in details manually below.")
+    found = [k for k in ["beds","baths","sqft","year_built","sale_price"] if zillow.get(k)]
+    source_label = zillow.get("source", "public records")
+    if found:
+        st.success(f"✅ Found data from {source_label}: {', '.join(found)}")
+        st.caption("Review below and fill in anything missing.")
     else:
-        found = [k for k in ["beds","baths","sqft","year_built"] if zillow.get(k)]
-        if found:
-            st.success(f"✅ Found data from Zillow: {', '.join(found)}")
-        else:
-            st.info("ℹ️ Property found but limited public data available. Please fill in details below.")
+        st.info("ℹ️ Address located but no public listing data found. Please fill in the details below manually — this is normal for off-market or rural properties.")
 
 # Subject property detail form
 if subj_street or st.session_state.subject_searched:
@@ -288,14 +289,13 @@ for comp_idx in range(3):
                 "url": z.get("url"),
             })
             st.session_state.comp_searched[comp_idx] = True
-            if z.get("error"):
-                st.warning(f"⚠️ Note: {z['error']}. Please fill in manually.")
+            found = [k for k in ["beds","baths","sqft","year_built","sale_price"] if z.get(k)]
+            source_label = z.get("source", "public records")
+            if found:
+                st.success(f"✅ Found from {source_label}: {', '.join(found)}")
+                st.caption("Fill in anything missing below.")
             else:
-                found = [k for k in ["beds","baths","sqft","year_built","sale_price"] if z.get(k)]
-                if found:
-                    st.success(f"✅ Found: {', '.join(found)}")
-                else:
-                    st.info("ℹ️ Limited data found. Fill in below.")
+                st.info("ℹ️ No public listing data found for this address. Fill in details manually below.")
 
         # Detail fields for comp
         cd = st.session_state.comps_data[comp_idx]
@@ -367,9 +367,29 @@ with rec_col2:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 5 — MAP PREVIEW
+# STEP 5 — AGENT NOTES
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 5 — Location Map Preview</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 5 — Agent Notes</div>', unsafe_allow_html=True)
+st.markdown("*Your personal notes — these will appear as a dedicated section in the final PDF.*")
+
+agent_notes = st.text_area(
+    "Agent Notes",
+    placeholder=(
+        "e.g. The sellers are motivated and flexible on closing date. "
+        "The basement has been freshly waterproofed. "
+        "Neighbors have expressed interest — could be an off-market opportunity…"
+    ),
+    height=160,
+    key="agent_notes",
+    label_visibility="collapsed",
+)
+
+st.markdown("---")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 6 — MAP PREVIEW
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="section-label">Step 6 — Location Map Preview</div>', unsafe_allow_html=True)
 
 valid_comps_for_map = [
     c for c in st.session_state.comps_data
@@ -404,9 +424,57 @@ if show_map:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# GENERATE DOCUMENT
+# STEP 7 — SUPPLEMENTAL PDF UPLOAD
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="section-label">Step 7 — Supplemental PDF (Optional)</div>', unsafe_allow_html=True)
+st.markdown(
+    "Upload any additional PDF to append to the end of the CMA. "
+    "**The first 2 pages will be automatically removed** — only the remaining pages will be included."
+)
+
+supplemental_pdf_file = st.file_uploader(
+    "Upload Supplemental PDF",
+    type=["pdf"],
+    key="supplemental_pdf",
+    label_visibility="collapsed",
+)
+
+if supplemental_pdf_file:
+    from pypdf import PdfReader as _PdfReader
+    import io as _io
+    supp_bytes_preview = supplemental_pdf_file.read()
+    supplemental_pdf_file.seek(0)
+    try:
+        supp_reader = _PdfReader(_io.BytesIO(supp_bytes_preview))
+        total_pages = len(supp_reader.pages)
+        pages_to_include = max(0, total_pages - 2)
+        if pages_to_include > 0:
+            st.success(
+                f"✅ **{supplemental_pdf_file.name}** — {total_pages} pages total. "
+                f"Pages 1–2 will be removed; **{pages_to_include} pages** will be appended to the CMA."
+            )
+        else:
+            st.warning(
+                f"⚠️ **{supplemental_pdf_file.name}** only has {total_pages} page(s). "
+                "After removing the first 2, nothing remains to append."
+            )
+    except Exception:
+        st.error("Could not read the uploaded PDF. Please try a different file.")
+
+st.markdown("---")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GENERATE PDF
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">Generate CMA Report</div>', unsafe_allow_html=True)
+
+st.info(
+    "📋 **What gets generated:**\n"
+    "1. **HC Cover Page** (always included automatically)\n"
+    "2. **CMA Content** — property details, comparables, map, price recommendation, your notes & recommendations\n"
+    "3. **Supplemental Pages** — your uploaded PDF minus its first 2 pages *(if uploaded)*",
+    icon=None,
+)
 
 # Build recommendations list
 recs = []
@@ -419,7 +487,7 @@ if rec_subdivision:  recs.append("land_subdivision")
 if rec_painting:     recs.append("painting_projects")
 
 st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
-generate = st.button("📄 Generate CMA Word Document", key="generate_btn")
+generate = st.button("📄 Generate CMA PDF", key="generate_btn")
 st.markdown('</div>', unsafe_allow_html=True)
 
 if generate:
@@ -433,9 +501,12 @@ if generate:
         sd["city_state"] = subj_city
         sd["address"] = f"{subj_street}, {subj_city}"
 
+    # Attach agent notes to subject dict so doc_builder can include them
+    sd["agent_notes"] = agent_notes
+
     active_comps = [c for c in st.session_state.comps_data if c.get("address")]
 
-    with st.spinner("Building your CMA document…"):
+    with st.spinner("Building your CMA PDF…"):
         # Geocode any missing coordinates
         if not sd.get("lat") and sd.get("address"):
             geo = geocode_address(sd["address"])
@@ -455,7 +526,7 @@ if generate:
             anr_data = search_vermont_anr_map(sd["address"])
             anr_url = anr_data.get("anr_atlas_url")
 
-        # Build the Word doc
+        # Build the Word doc (in memory)
         doc_buffer = build_cma_document(
             subject=sd,
             comps=active_comps,
@@ -463,25 +534,57 @@ if generate:
             price_low=int(price_low),
             price_high=int(price_high),
             price_notes=price_notes,
-            map_png_bytes=None,   # Interactive map via folium in app; link in doc
+            map_png_bytes=None,
             anr_url=anr_url,
             logo_path="hall_collins_logo.png",
         )
-        st.session_state.doc_bytes = doc_buffer.getvalue()
+        docx_bytes = doc_buffer.getvalue()
+        st.session_state.doc_bytes = docx_bytes
 
-    st.success("✅ CMA document generated!")
+        # Read supplemental PDF if uploaded
+        supp_bytes = None
+        if supplemental_pdf_file is not None:
+            supplemental_pdf_file.seek(0)
+            supp_bytes = supplemental_pdf_file.read()
 
-if st.session_state.doc_bytes:
+        # Merge into final PDF
+        try:
+            pdf_bytes = merge_cma_pdf(
+                docx_bytes=docx_bytes,
+                supplemental_pdf_bytes=supp_bytes,
+            )
+            st.session_state.pdf_bytes = pdf_bytes
+            st.success("✅ CMA PDF generated successfully!")
+        except RuntimeError as e:
+            st.error(str(e))
+            st.stop()
+        except FileNotFoundError as e:
+            st.error(str(e))
+            st.stop()
+
+if st.session_state.get("pdf_bytes"):
     addr_slug = re.sub(r"[^a-zA-Z0-9]", "_", subj_street or "CMA")
-    filename = f"CMA_{addr_slug}.docx"
-    st.download_button(
-        label="⬇️ Download CMA Word Document",
-        data=st.session_state.doc_bytes,
-        file_name=filename,
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        use_container_width=True,
-    )
-    st.caption(f"📄 {filename} — Open in Microsoft Word or Google Docs")
+    filename = f"CMA_{addr_slug}.pdf"
+    col_dl1, col_dl2 = st.columns([2, 1])
+    with col_dl1:
+        st.download_button(
+            label="⬇️ Download CMA PDF",
+            data=st.session_state.pdf_bytes,
+            file_name=filename,
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    with col_dl2:
+        # Also offer the raw DOCX if they want to edit
+        if st.session_state.get("doc_bytes"):
+            st.download_button(
+                label="⬇️ Download DOCX (editable)",
+                data=st.session_state.doc_bytes,
+                file_name=filename.replace(".pdf", ".docx"),
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
+    st.caption(f"📄 {filename} — HC Cover + CMA Content" + (" + Supplemental Pages" if supplemental_pdf_file else ""))
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
@@ -491,3 +594,4 @@ st.markdown(
     f'</div>',
     unsafe_allow_html=True,
 )
+
