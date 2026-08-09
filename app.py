@@ -9,6 +9,8 @@ import os
 import base64
 import time
 import re
+import json
+from datetime import date
 from io import BytesIO
 
 from property_research import get_property_data, geocode_address
@@ -133,6 +135,109 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+
+# ── Sidebar — Save & Load Session ─────────────────────────────────────────────
+
+def _session_to_dict():
+    """Collect all editable CMA data into a plain dict for JSON export."""
+    return {
+        "_version": APP_VERSION,
+        "_saved": date.today().isoformat(),
+        "subject": st.session_state.get("subject_data", {}),
+        "comps": st.session_state.get("comps_data", [empty_comp()] * 3),
+        "price_low": st.session_state.get("price_low", 400000),
+        "price_high": st.session_state.get("price_high", 450000),
+        "price_notes": st.session_state.get("price_notes", ""),
+        "agent_notes": st.session_state.get("agent_notes", ""),
+        "recommendations": {
+            "rec_spring":    st.session_state.get("rec_spring", False),
+            "rec_septic":    st.session_state.get("rec_septic", False),
+            "rec_home_insp": st.session_state.get("rec_home_insp", False),
+            "rec_staging":   st.session_state.get("rec_staging", False),
+            "rec_clean":     st.session_state.get("rec_clean", False),
+            "rec_subdivision": st.session_state.get("rec_subdivision", False),
+            "rec_painting":  st.session_state.get("rec_painting", False),
+        },
+    }
+
+
+def _load_session_from_dict(d: dict):
+    """Push a saved session dict back into session state."""
+    if "subject" in d:
+        st.session_state.subject_data = d["subject"]
+        st.session_state.subject_searched = bool(d["subject"].get("street_address"))
+    if "comps" in d:
+        loaded = d["comps"]
+        # Always keep exactly 3 slots
+        while len(loaded) < 3:
+            loaded.append(empty_comp())
+        st.session_state.comps_data = loaded[:3]
+        st.session_state.comp_searched = [bool(c.get("address")) for c in loaded[:3]]
+    for key in ("price_low", "price_high", "price_notes", "agent_notes"):
+        if key in d:
+            st.session_state[key] = d[key]
+    for rec_key, val in d.get("recommendations", {}).items():
+        st.session_state[rec_key] = val
+
+
+with st.sidebar:
+    st.markdown(
+        f'<div style="font-family:Georgia;color:{NAVY};font-size:1.1rem;'
+        f'font-weight:700;border-bottom:2px solid {PINK};padding-bottom:6px;'
+        f'margin-bottom:12px;">💾 Save & Reload CMA</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Load ──────────────────────────────────────────────────────────────────
+    st.markdown("**Open a saved CMA session:**")
+    uploaded_session = st.file_uploader(
+        "Upload .json session file",
+        type=["json"],
+        key="session_upload",
+        label_visibility="collapsed",
+    )
+    if uploaded_session is not None:
+        try:
+            session_data = json.loads(uploaded_session.read().decode("utf-8"))
+            _load_session_from_dict(session_data)
+            saved_on = session_data.get("_saved", "unknown date")
+            st.success(f"✅ Session loaded (saved {saved_on})")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Could not load session: {e}")
+
+    st.markdown("---")
+
+    # ── Save ──────────────────────────────────────────────────────────────────
+    st.markdown("**Save your current work:**")
+    if st.button("💾 Save Session to File", use_container_width=True, key="save_btn"):
+        session_dict = _session_to_dict()
+        session_json = json.dumps(session_dict, indent=2, default=str)
+        subj = st.session_state.subject_data.get("street_address", "CMA")
+        slug = re.sub(r"[^a-zA-Z0-9]", "_", subj)
+        st.session_state["_save_json"] = session_json
+        st.session_state["_save_filename"] = f"CMA_session_{slug}_{date.today().isoformat()}.json"
+
+    if st.session_state.get("_save_json"):
+        st.download_button(
+            label="⬇️ Download Session File",
+            data=st.session_state["_save_json"],
+            file_name=st.session_state["_save_filename"],
+            mime="application/json",
+            use_container_width=True,
+            key="save_download_btn",
+        )
+        st.caption("Upload this file later to pick up exactly where you left off.")
+
+    st.markdown("---")
+    st.markdown(
+        '<div style="font-size:0.75rem;color:#999;">'
+        'The session file saves all property details, comps, pricing, '
+        'notes, and recommendations — not the PDF itself.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Header ─────────────────────────────────────────────────────────────────────
@@ -545,6 +650,10 @@ if generate:
             )
             st.session_state.pdf_bytes = pdf_bytes
             st.session_state.doc_bytes = None  # no DOCX in this flow
+            # Auto-generate a session save file at the same time
+            st.session_state["_save_json"] = json.dumps(_session_to_dict(), indent=2, default=str)
+            slug = re.sub(r"[^a-zA-Z0-9]", "_", sd.get("street_address", "CMA"))
+            st.session_state["_save_filename"] = f"CMA_session_{slug}_{date.today().isoformat()}.json"
             st.success("✅ CMA PDF generated successfully!")
         except FileNotFoundError as e:
             st.error(str(e))
@@ -556,14 +665,30 @@ if generate:
 if st.session_state.get("pdf_bytes"):
     addr_slug = re.sub(r"[^a-zA-Z0-9]", "_", subj_street or "CMA")
     filename = f"CMA_{addr_slug}.pdf"
-    st.download_button(
-        label="⬇️ Download CMA PDF",
-        data=st.session_state.pdf_bytes,
-        file_name=filename,
-        mime="application/pdf",
-        use_container_width=True,
+    dl_col1, dl_col2 = st.columns(2)
+    with dl_col1:
+        st.download_button(
+            label="⬇️ Download CMA PDF",
+            data=st.session_state.pdf_bytes,
+            file_name=filename,
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    with dl_col2:
+        if st.session_state.get("_save_json"):
+            st.download_button(
+                label="⬇️ Download Session File",
+                data=st.session_state["_save_json"],
+                file_name=st.session_state.get("_save_filename", "CMA_session.json"),
+                mime="application/json",
+                use_container_width=True,
+                key="main_save_btn",
+            )
+    st.caption(
+        f"📄 **PDF** — HC Cover + CMA Content"
+        + (" + Supplemental Pages" if supplemental_pdf_file else "")
+        + "  |  💾 **Session file** — upload this to reopen and edit later"
     )
-    st.caption(f"📄 {filename} — HC Cover + CMA Content" + (" + Supplemental Pages" if supplemental_pdf_file else ""))
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("---")

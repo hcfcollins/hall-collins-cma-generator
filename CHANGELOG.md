@@ -4,6 +4,24 @@ All notable changes are logged here. Most recent version is at the top.
 
 ---
 
+## v1.3.0 — August 9, 2026
+
+### Added
+- **Save & Reload CMA Sessions** — every generated CMA now produces a
+  companion `.json` session file alongside the PDF download.
+- Sidebar panel "💾 Save & Reload CMA" with:
+  - **Load**: upload a `.json` session file to restore all fields exactly
+    as they were (property details, comps, pricing, notes, recommendations).
+  - **Save**: manually save your current work at any point, even before
+    generating the PDF.
+- On generate, the session file is created automatically — two download
+  buttons appear side by side: PDF and session file.
+- Session files are named `CMA_session_<address>_<date>.json` for easy
+  organization.
+- No new dependencies — session files are plain JSON.
+
+---
+
 ## v1.2.0 — August 9, 2026
 
 ### Changed
