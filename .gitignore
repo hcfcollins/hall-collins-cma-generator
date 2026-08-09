@@ -21,6 +21,9 @@ env/
 .vscode/settings.json
 .vscode/launch.json
 
+# Streamlit — track config but never track secrets
+.streamlit/secrets.toml
+
 # Generated CMA output files — don't track client documents
 CMA_*.pdf
 CMA_*.docx
