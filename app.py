@@ -418,6 +418,50 @@ if subj_street or st.session_state.subject_searched:
             placeholder="e.g. High-end finishes throughout, granite counters, custom cabinetry...",
             value=sd.get("finishes_note", ""), key="s_finishes")
 
+        st.markdown("---")
+        st.markdown("**Property Characteristics**")
+
+        # ── Fuel Types (multi-select checkboxes) ──────────────────────────────
+        st.markdown("*Fuel Type(s):*")
+        fuel_options = ["Oil", "Propane", "Pellet", "Electric", "Mini Split", "Wood", "Other"]
+        current_fuel = sd.get("fuel_types", [])
+        fuel_cols = st.columns(4)
+        selected_fuel = []
+        for i, fuel in enumerate(fuel_options):
+            with fuel_cols[i % 4]:
+                if st.checkbox(fuel, value=(fuel in current_fuel), key=f"fuel_{fuel}"):
+                    selected_fuel.append(fuel)
+        sd["fuel_types"] = selected_fuel
+
+        # ── Septic / Well / View / Solar ─────────────────────────────────────
+        st.markdown("")
+        char_col1, char_col2 = st.columns(2)
+        with char_col1:
+            septic_options = ["— not specified —", "Yes", "No"]
+            septic_idx = septic_options.index(sd["private_septic"]) if sd.get("private_septic") in septic_options else 0
+            sd["private_septic"] = st.selectbox("Private Septic", septic_options, index=septic_idx, key="s_septic")
+
+            well_options = ["— not specified —", "Yes", "No"]
+            well_idx = well_options.index(sd["private_well"]) if sd.get("private_well") in well_options else 0
+            sd["private_well"] = st.selectbox("Private Well", well_options, index=well_idx, key="s_well")
+
+            view_options = ["— not specified —", "Yes", "No"]
+            view_idx = view_options.index(sd["view"]) if sd.get("view") in view_options else 0
+            sd["view"] = st.selectbox("View", view_options, index=view_idx, key="s_view")
+
+        with char_col2:
+            solar_options = ["— not specified —", "No", "Yes — Owned", "Yes — Leased"]
+            solar_idx = solar_options.index(sd["solar"]) if sd.get("solar") in solar_options else 0
+            sd["solar"] = st.selectbox("Solar", solar_options, index=solar_idx, key="s_solar")
+
+        # ── Boundary Notes ────────────────────────────────────────────────────
+        sd["boundary_notes"] = st.text_area(
+            "Notes on Boundary Lines",
+            placeholder="e.g. Back boundary runs along the stone wall, front setback is 25 ft from road...",
+            value=sd.get("boundary_notes", ""),
+            key="s_boundary",
+        )
+
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -559,53 +603,31 @@ if supplemental_pdf_file:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 7 — ANR MAP
+# STEP 7 — ANR MAP PDF UPLOAD
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 7 — Vermont ANR Natural Resource Map</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 7 — ANR Map (Optional)</div>', unsafe_allow_html=True)
 st.markdown(
-    "The Vermont ANR (Agency of Natural Resources) Atlas shows wetlands, floodplains, soil types, "
-    "conservation land, and other natural resource data — very useful for land and rural properties. "
-    "The link will be included in the PDF. You can also preview it here."
+    "Go to [anrmaps.vermont.gov](https://anrmaps.vermont.gov/websites/anra5/) to pull up the property, "
+    "print/export it as a PDF, then upload it here. It will be appended to the end of the CMA as-is — "
+    "no pages will be removed."
 )
 
-# Build / retrieve ANR URL from subject data
-_anr_url = st.session_state.subject_data.get("anr_url")
+anr_pdf_file = st.file_uploader(
+    "Upload ANR Map PDF",
+    type=["pdf"],
+    key="anr_pdf",
+    label_visibility="collapsed",
+)
 
-# Manual lat/lng override if not yet geocoded
-anr_col1, anr_col2 = st.columns([3, 1])
-with anr_col1:
-    anr_manual_address = st.text_input(
-        "Generate ANR link for address (auto-fills from subject property):",
-        value=st.session_state.subject_data.get("address", ""),
-        key="anr_address_input",
-        placeholder="123 Maple Street, Woodstock, VT 05091",
-    )
-with anr_col2:
-    st.markdown("<br>", unsafe_allow_html=True)
-    gen_anr = st.button("🗺️ Get ANR Map Link", key="gen_anr_btn", use_container_width=True)
-
-if gen_anr and anr_manual_address:
-    with st.spinner("Looking up coordinates for ANR map…"):
-        anr_result = search_vermont_anr_map(anr_manual_address)
-        _anr_url = anr_result.get("anr_atlas_url")
-        if _anr_url:
-            st.session_state.subject_data["anr_url"] = _anr_url
-            st.session_state.subject_data["lat"] = anr_result.get("lat")
-            st.session_state.subject_data["lng"] = anr_result.get("lng")
-
-if _anr_url:
-    st.success(f"✅ ANR Map link ready — will be included in the PDF.")
-    st.markdown(f"**🔗 Open in browser:** [{_anr_url}]({_anr_url})")
-
-    # Embed the ANR map as an iframe preview
-    with st.expander("🗺️ Preview ANR Map", expanded=False):
-        st.components.v1.iframe(_anr_url, height=500, scrolling=True)
-        st.caption(
-            "Vermont ANR Natural Resource Atlas — shows wetlands, floodplains, "
-            "soils, conserved lands, and more. Open the link above for full functionality."
-        )
-elif st.session_state.subject_data.get("address"):
-    st.info("ℹ️ Click **Get ANR Map Link** to generate the Vermont ANR Atlas link for this property.")
+if anr_pdf_file:
+    from pypdf import PdfReader as _PdfReader
+    import io as _io
+    try:
+        anr_reader = _PdfReader(_io.BytesIO(anr_pdf_file.read()))
+        anr_pdf_file.seek(0)
+        st.success(f"✅ **{anr_pdf_file.name}** — {len(anr_reader.pages)} page(s) will be appended.")
+    except Exception:
+        st.error("Could not read the uploaded PDF. Please try a different file.")
 
 st.markdown("---")
 
@@ -618,8 +640,8 @@ st.info(
     "📋 **What gets generated:**\n"
     "1. **HC Cover Page** (always included automatically)\n"
     "2. **CMA Content** — subject property details, price recommendation, recommendations & notes\n"
-    "3. **ANR Map link** — printed in the PDF for easy reference *(if generated)*\n"
-    "4. **Other CMA Report** — your uploaded PDF minus its first 2 pages *(if uploaded)*",
+    "3. **Other CMA Report** — your uploaded PDF minus its first 2 pages *(if uploaded)*\n"
+    "4. **ANR Map** — your uploaded ANR PDF appended as-is *(if uploaded)*",
     icon=None,
 )
 
@@ -658,16 +680,16 @@ if generate:
             sd["lat"] = geo.get("lat")
             sd["lng"] = geo.get("lng")
 
-        anr_url = sd.get("anr_url")
-        if not anr_url and sd.get("lat") and sd.get("lng"):
-            anr_data = search_vermont_anr_map(sd["address"])
-            anr_url = anr_data.get("anr_atlas_url")
-
-        # Read supplemental PDF if uploaded
+        # Read uploaded PDFs
         supp_bytes = None
         if supplemental_pdf_file is not None:
             supplemental_pdf_file.seek(0)
             supp_bytes = supplemental_pdf_file.read()
+
+        anr_bytes = None
+        if anr_pdf_file is not None:
+            anr_pdf_file.seek(0)
+            anr_bytes = anr_pdf_file.read()
 
         # Build and merge the final PDF directly (no Word needed)
         try:
@@ -679,8 +701,9 @@ if generate:
                 price_high=int(price_high),
                 price_notes=price_notes,
                 logo_path="hall_collins_logo.png",
-                anr_url=sd.get("anr_url"),
+                anr_url=None,
                 supplemental_pdf_bytes=supp_bytes,
+                anr_pdf_bytes=anr_bytes,
             )
             st.session_state.pdf_bytes = pdf_bytes
             st.session_state.doc_bytes = None  # no DOCX in this flow
@@ -720,7 +743,8 @@ if st.session_state.get("pdf_bytes"):
             )
     st.caption(
         f"📄 **PDF** — HC Cover + CMA Content"
-        + (" + Supplemental Pages" if supplemental_pdf_file else "")
+        + (" + Other CMA Pages" if supplemental_pdf_file else "")
+        + (" + ANR Map" if anr_pdf_file else "")
         + "  |  💾 **Session file** — upload this to reopen and edit later"
     )
 

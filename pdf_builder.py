@@ -96,27 +96,62 @@ def _section_header(text, s):
 def _build_subject_overview(subject, s):
     elems = _section_header("Subject Property Overview", s)
 
-    rows = [
-        ["Street Address", subject.get("street_address", "—")],
-        ["City / State",   subject.get("city_state", "—")],
-        ["Property Type",  _fmt(subject.get("property_type"), fallback="—")],
-        ["Bedrooms",       _fmt(subject.get("beds"), fallback="—")],
-        ["Bathrooms",      _fmt(subject.get("baths"), fallback="—")],
-        ["Living Area",    _fmt(subject.get("sqft"), suffix=" sq ft", fallback="—")],
-        ["Lot Size",       _fmt(subject.get("lot_acres"), suffix=" acres", fallback="—")],
-        ["Year Built",     _fmt(subject.get("year_built"), fallback="—")],
-        ["Garage Spaces",  _fmt(subject.get("garage"), fallback="—")],
-    ]
+    # ── Core fields — only include if non-zero / non-empty ───────────────────
+    def _row(label, val):
+        return [Paragraph(label, s["label"]), Paragraph(str(val), s["body"])]
 
-    tbl = Table(
-        [[Paragraph(r[0], s["label"]), Paragraph(str(r[1]), s["body"])] for r in rows],
-        colWidths=[2.1 * inch, 4.4 * inch],
-    )
+    rows = []
+    if subject.get("street_address"):
+        rows.append(_row("Street Address", subject["street_address"]))
+    if subject.get("city_state"):
+        rows.append(_row("City / State", subject["city_state"]))
+    if subject.get("property_type"):
+        rows.append(_row("Property Type", subject["property_type"]))
+    if subject.get("beds"):
+        rows.append(_row("Bedrooms", _fmt(subject["beds"])))
+    if subject.get("baths"):
+        rows.append(_row("Bathrooms", _fmt(subject["baths"])))
+    if subject.get("sqft"):
+        rows.append(_row("Living Area", _fmt(subject["sqft"], suffix=" sq ft")))
+    if subject.get("lot_acres"):
+        rows.append(_row("Lot Size", _fmt(subject["lot_acres"], suffix=" acres")))
+    if subject.get("year_built"):
+        rows.append(_row("Year Built", _fmt(subject["year_built"])))
+    if subject.get("garage"):
+        rows.append(_row("Garage Spaces", _fmt(subject["garage"])))
+
+    # ── New characteristic fields — only if set ───────────────────────────────
+    fuel = subject.get("fuel_types", [])
+    if fuel:
+        rows.append(_row("Fuel Type(s)", ", ".join(fuel)))
+
+    septic = subject.get("private_septic", "")
+    if septic and septic != "— not specified —":
+        rows.append(_row("Private Septic", septic))
+
+    well = subject.get("private_well", "")
+    if well and well != "— not specified —":
+        rows.append(_row("Private Well", well))
+
+    view = subject.get("view", "")
+    if view and view != "— not specified —":
+        rows.append(_row("View", view))
+
+    solar = subject.get("solar", "")
+    if solar and solar not in ("— not specified —", "No"):
+        rows.append(_row("Solar", solar))
+    elif solar == "No":
+        rows.append(_row("Solar", "No"))
+
+    if not rows:
+        elems.append(Paragraph("No subject property details entered.", s["caption"]))
+        return elems
+
+    tbl = Table(rows, colWidths=[2.1 * inch, 4.4 * inch])
     tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), STEEL),
-        ("BACKGROUND", (1, 0), (1, -1), WHITE),
         ("ROWBACKGROUNDS", (0, 0), (-1, -1), [STEEL, LGRAY]),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
+        ("BACKGROUND", (0, 0), (0, -1), STEEL),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
@@ -124,6 +159,14 @@ def _build_subject_overview(subject, s):
     ]))
     elems.append(tbl)
 
+    # ── Boundary notes (text block, not a table row) ──────────────────────────
+    boundary = subject.get("boundary_notes", "").strip()
+    if boundary:
+        elems.append(Spacer(1, 8))
+        elems.append(Paragraph("<b>Boundary Notes:</b>", s["label"]))
+        elems.append(Paragraph(boundary, s["body_indent"]))
+
+    # ── Features / Finishes ───────────────────────────────────────────────────
     features = subject.get("features_notes", "").strip()
     finishes = subject.get("finishes_note", "").strip()
     if features:
@@ -498,13 +541,14 @@ def merge_cma_pdf(subject, comps, recommendations,
                    price_low, price_high, price_notes,
                    logo_path="hall_collins_logo.png",
                    anr_url=None,
-                   supplemental_pdf_bytes=None) -> bytes:
+                   supplemental_pdf_bytes=None,
+                   anr_pdf_bytes=None) -> bytes:
     """
     Build and merge the final CMA PDF:
-      1. HC Cover Page  (always fixed — HC - CMA Cover Page Summer Pic.pdf)
-      2. CMA Content    (built with ReportLab)
-      3. ANR Map section (printed link, if anr_url provided)
-      4. Supplemental   (uploaded PDF, pages 1–2 stripped), if provided
+      1. HC Cover Page         (always fixed)
+      2. CMA Content           (built with ReportLab)
+      3. Other CMA PDF         (pages 1–2 stripped), if provided
+      4. ANR Map PDF           (appended as-is), if provided
 
     Returns merged PDF as bytes.
     """
@@ -520,11 +564,11 @@ def merge_cma_pdf(subject, comps, recommendations,
     for page in cover_reader.pages:
         writer.add_page(page)
 
-    # ── 2. CMA Content (with ANR section) ─────────────────────────────────────
+    # ── 2. CMA Content ────────────────────────────────────────────────────────
     cma_bytes = _build_cma_pdf_bytes(
         subject, comps, recommendations,
         price_low, price_high, price_notes,
-        logo_path, anr_url=anr_url,
+        logo_path, anr_url=None,
     )
     cma_reader = PdfReader(io.BytesIO(cma_bytes))
     for page in cma_reader.pages:
@@ -533,8 +577,13 @@ def merge_cma_pdf(subject, comps, recommendations,
     # ── 3. Other CMA PDF (strip pages 1 & 2) ─────────────────────────────────
     if supplemental_pdf_bytes:
         supp_reader = PdfReader(io.BytesIO(supplemental_pdf_bytes))
-        supp_pages = list(supp_reader.pages)
-        for page in supp_pages[2:]:   # skip first 2, append the rest
+        for page in list(supp_reader.pages)[2:]:
+            writer.add_page(page)
+
+    # ── 4. ANR Map PDF (append as-is) ────────────────────────────────────────
+    if anr_pdf_bytes:
+        anr_reader = PdfReader(io.BytesIO(anr_pdf_bytes))
+        for page in anr_reader.pages:
             writer.add_page(page)
 
     # ── Output ────────────────────────────────────────────────────────────────
