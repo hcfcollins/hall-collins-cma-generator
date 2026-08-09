@@ -310,42 +310,7 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
 
 
 def _build_research_notes(subject, recommendations, s):
-    elems = _section_header("Research Notes & Property Overview", s)
-
-    beds  = subject.get("beds", "")
-    baths = subject.get("baths", "")
-    sqft  = subject.get("sqft", "")
-    year  = subject.get("year_built", "")
-    lot   = subject.get("lot_acres", "")
-    prop_type = subject.get("property_type", "home")
-    features = subject.get("features_notes", "")
-    description = subject.get("description", "")
-
-    parts = [p for p in [
-        f"{int(beds)}-bedroom" if beds else "",
-        f"{int(baths) if baths and float(baths)==int(float(baths)) else baths}-bathroom" if baths else "",
-        f"{int(sqft):,} square foot" if sqft else "",
-    ] if p]
-    loc_parts = [p for p in [
-        f"built in {int(year)}" if year else "",
-        f"set on {lot} acres" if lot else "",
-    ] if p]
-
-    narrative = (
-        f"This lovely {', '.join(parts)} {str(prop_type).lower()} "
-        + (f"is {' and '.join(loc_parts)}" if loc_parts else "")
-        + " and offers a wonderful opportunity in today's market."
-    )
-    if features:
-        narrative += f" {features}"
-    if description:
-        sentences = description.replace("\n", " ").split(". ")
-        excerpt = ". ".join(sentences[:2]).strip()
-        if excerpt and len(excerpt) > 20:
-            narrative += f" {excerpt}."
-
-    elems.append(Paragraph(narrative, s["body"]))
-    elems.append(Spacer(1, 8))
+    elems = _section_header("Agent Recommendations", s)
 
     rec_map = {
         "wait_spring": ("🌸 Wait for Spring",
@@ -382,7 +347,6 @@ def _build_research_notes(subject, recommendations, s):
     }
 
     if recommendations:
-        elems.append(Paragraph("Agent Recommendations", s["h2"]))
         for key in recommendations:
             if key in rec_map:
                 title, body = rec_map[key]
@@ -401,8 +365,16 @@ def _build_agent_notes(subject, s):
     if not notes:
         return []
     elems = _section_header("Agent Notes", s)
-    elems.append(Paragraph(notes, s["body_indent"]))
-    elems.append(Spacer(1, 12))
+    # Split on blank lines to preserve paragraph breaks
+    paragraphs = [p.strip() for p in notes.split("\n\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [notes]
+    for para in paragraphs:
+        # Within each paragraph, replace single newlines with a space
+        text = para.replace("\n", " ")
+        elems.append(Paragraph(text, s["body_indent"]))
+        elems.append(Spacer(1, 6))
+    elems.append(Spacer(1, 6))
     return elems
 
 
@@ -489,15 +461,15 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
     story += _build_subject_overview(subject, s)
     story.append(_divider())
 
-    # Research notes + recommendations
-    story += _build_research_notes(subject, recommendations, s)
-    story.append(_divider())
-
-    # Agent notes
+    # Agent notes (before recommendations)
     agent_notes_elems = _build_agent_notes(subject, s)
     if agent_notes_elems:
         story += agent_notes_elems
         story.append(_divider())
+
+    # Recommendations
+    story += _build_research_notes(subject, recommendations, s)
+    story.append(_divider())
 
     # ANR Map section
     anr_elems = _build_anr_section(anr_url, s)
