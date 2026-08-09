@@ -181,83 +181,6 @@ def _build_subject_overview(subject, s):
     return elems
 
 
-def _build_comparison_table(subject, comps, s):
-    elems = _section_header("Comparable Properties — Side by Side", s)
-
-    all_props = [subject] + list(comps[:3])
-    headers = ["", "⭐ Subject"] + [f"Comp #{i+1}" for i in range(len(comps[:3]))]
-
-    rows_def = [
-        ("Sale / List Price",   "sale_price",       "$",  ""),
-        ("Bedrooms",            "beds",             "",   ""),
-        ("Bathrooms",           "baths",            "",   ""),
-        ("Garage Spaces",       "garage",           "",   ""),
-        ("Living Area",         "sqft",             "",   " sq ft"),
-        ("Lot Size",            "lot_acres",        "",   " ac"),
-        ("Year Built",          "year_built",       "",   ""),
-        ("Days on Market",      "days_on_market",   "",   " days"),
-        ("Property Type",       "property_type",    "",   ""),
-        ("Quality of Finishes", "finishes_note",    "",   ""),
-    ]
-
-    col_count = len(all_props) + 1  # label + subject + comps
-    col_w = [2.0 * inch] + [round((6.5 - 2.0) / len(all_props), 2) * inch] * len(all_props)
-
-    # Header row
-    header_row = []
-    for i, h in enumerate(headers[:col_count]):
-        style = ParagraphStyle("th", fontName="Times-Bold", fontSize=9,
-                               textColor=WHITE, alignment=TA_CENTER)
-        header_row.append(Paragraph(h, style))
-
-    data = [header_row]
-    for label, key, prefix, suffix in rows_def:
-        row = [Paragraph(label, s["label"])]
-        for prop in all_props:
-            raw = prop.get(key)
-            display = _fmt(raw, prefix=prefix, suffix=suffix)
-            p_style = ParagraphStyle("td", fontName="Times-Roman", fontSize=9,
-                                     textColor=DGRAY, alignment=TA_CENTER)
-            row.append(Paragraph(display, p_style))
-        data.append(row)
-
-    tbl = Table(data, colWidths=col_w)
-
-    # Table style
-    ts = [
-        # Header
-        ("BACKGROUND", (0, 0), (0, 0), NAVY),
-        ("BACKGROUND", (1, 0), (1, 0), PINK),
-        *[("BACKGROUND", (i, 0), (i, 0), NAVY) for i in range(2, col_count)],
-        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
-        # Alternating rows
-        *[("BACKGROUND", (0, r), (-1, r), BLUSH if r % 2 == 0 else WHITE)
-          for r in range(1, len(data))],
-        # Label column
-        ("BACKGROUND", (0, 1), (0, -1), STEEL),
-        # Grid
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-    ]
-    tbl.setStyle(TableStyle(ts))
-    elems.append(tbl)
-    elems.append(Spacer(1, 10))
-
-    # Address reference list
-    elems.append(Paragraph("<b>Comparable Property Addresses:</b>", s["label"]))
-    for i, comp in enumerate(comps[:3]):
-        addr = comp.get("address", "Unknown")
-        source = comp.get("source", "Manual Entry")
-        elems.append(Paragraph(f"• Comp #{i+1}: {addr}  |  Source: {source}", s["body"]))
-
-    elems.append(Spacer(1, 12))
-    return elems
-
-
 def _build_price_recommendation(subject, comps, price_low, price_high, price_notes, s):
     elems = _section_header("Price Recommendation", s)
 
@@ -504,10 +427,6 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
 
     # Property overview
     story += _build_subject_overview(subject, s)
-    story.append(_divider())
-
-    # Comparison table
-    story += _build_comparison_table(subject, comps, s)
     story.append(_divider())
 
     # Research notes + recommendations

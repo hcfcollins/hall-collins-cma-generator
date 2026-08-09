@@ -407,8 +407,6 @@ if subj_street or st.session_state.subject_searched:
             sd["property_type"] = st.selectbox("Property Type",
                 ["Single Family", "Multi Family", "Condo", "Land", "Commercial", "Other"],
                 index=0, key="s_type")
-            sd["sale_price"] = st.number_input("Recent Sale/List Price ($)", min_value=0,
-                                                value=int(sd["sale_price"]) if sd.get("sale_price") else 0, key="s_price")
             sd["days_on_market"] = st.number_input("Days on Market", min_value=0, max_value=1000,
                                                     value=int(sd["days_on_market"]) if sd.get("days_on_market") else 0, key="s_dom")
         sd["features_notes"] = st.text_area("Notable Features / Highlights",
