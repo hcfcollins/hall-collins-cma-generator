@@ -13,7 +13,6 @@ from io import BytesIO
 
 from property_research import get_property_data, geocode_address
 from map_builder import build_comparison_map
-from doc_builder import build_cma_document
 from pdf_builder import merge_cma_pdf
 
 # ── App Config ─────────────────────────────────────────────────────────────────
@@ -526,64 +525,44 @@ if generate:
             anr_data = search_vermont_anr_map(sd["address"])
             anr_url = anr_data.get("anr_atlas_url")
 
-        # Build the Word doc (in memory)
-        doc_buffer = build_cma_document(
-            subject=sd,
-            comps=active_comps,
-            recommendations=recs,
-            price_low=int(price_low),
-            price_high=int(price_high),
-            price_notes=price_notes,
-            map_png_bytes=None,
-            anr_url=anr_url,
-            logo_path="hall_collins_logo.png",
-        )
-        docx_bytes = doc_buffer.getvalue()
-        st.session_state.doc_bytes = docx_bytes
-
         # Read supplemental PDF if uploaded
         supp_bytes = None
         if supplemental_pdf_file is not None:
             supplemental_pdf_file.seek(0)
             supp_bytes = supplemental_pdf_file.read()
 
-        # Merge into final PDF
+        # Build and merge the final PDF directly (no Word needed)
         try:
             pdf_bytes = merge_cma_pdf(
-                docx_bytes=docx_bytes,
+                subject=sd,
+                comps=active_comps,
+                recommendations=recs,
+                price_low=int(price_low),
+                price_high=int(price_high),
+                price_notes=price_notes,
+                logo_path="hall_collins_logo.png",
                 supplemental_pdf_bytes=supp_bytes,
             )
             st.session_state.pdf_bytes = pdf_bytes
+            st.session_state.doc_bytes = None  # no DOCX in this flow
             st.success("✅ CMA PDF generated successfully!")
-        except RuntimeError as e:
-            st.error(str(e))
-            st.stop()
         except FileNotFoundError as e:
             st.error(str(e))
+            st.stop()
+        except Exception as e:
+            st.error(f"❌ PDF generation failed: {e}")
             st.stop()
 
 if st.session_state.get("pdf_bytes"):
     addr_slug = re.sub(r"[^a-zA-Z0-9]", "_", subj_street or "CMA")
     filename = f"CMA_{addr_slug}.pdf"
-    col_dl1, col_dl2 = st.columns([2, 1])
-    with col_dl1:
-        st.download_button(
-            label="⬇️ Download CMA PDF",
-            data=st.session_state.pdf_bytes,
-            file_name=filename,
-            mime="application/pdf",
-            use_container_width=True,
-        )
-    with col_dl2:
-        # Also offer the raw DOCX if they want to edit
-        if st.session_state.get("doc_bytes"):
-            st.download_button(
-                label="⬇️ Download DOCX (editable)",
-                data=st.session_state.doc_bytes,
-                file_name=filename.replace(".pdf", ".docx"),
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-            )
+    st.download_button(
+        label="⬇️ Download CMA PDF",
+        data=st.session_state.pdf_bytes,
+        file_name=filename,
+        mime="application/pdf",
+        use_container_width=True,
+    )
     st.caption(f"📄 {filename} — HC Cover + CMA Content" + (" + Supplemental Pages" if supplemental_pdf_file else ""))
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
