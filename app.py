@@ -13,7 +13,7 @@ import json
 from datetime import date
 from io import BytesIO
 
-from property_research import get_property_data, geocode_address
+from property_research import get_property_data, geocode_address, search_vermont_anr_map
 from map_builder import build_comparison_map
 from pdf_builder import merge_cma_pdf
 
@@ -112,22 +112,10 @@ def fmt_price(val):
         return str(val) if val else "—"
 
 
-def empty_comp():
-    return {
-        "address": "", "beds": None, "baths": None, "sqft": None,
-        "lot_acres": None, "year_built": None, "sale_price": None,
-        "days_on_market": None, "garage": None, "property_type": None,
-        "finishes_note": "", "source": "Manual Entry",
-        "lat": None, "lng": None, "url": None,
-    }
-
-
 # ── Session State ──────────────────────────────────────────────────────────────
 defaults = {
     "subject_data": {},
-    "comps_data": [empty_comp(), empty_comp(), empty_comp()],
     "subject_searched": False,
-    "comp_searched": [False, False, False],
     "doc_bytes": None,
     "pdf_bytes": None,
     "map_html": None,
@@ -145,19 +133,18 @@ def _session_to_dict():
         "_version": APP_VERSION,
         "_saved": date.today().isoformat(),
         "subject": st.session_state.get("subject_data", {}),
-        "comps": st.session_state.get("comps_data", [empty_comp()] * 3),
         "price_low": st.session_state.get("price_low", 400000),
         "price_high": st.session_state.get("price_high", 450000),
         "price_notes": st.session_state.get("price_notes", ""),
         "agent_notes": st.session_state.get("agent_notes", ""),
         "recommendations": {
-            "rec_spring":    st.session_state.get("rec_spring", False),
-            "rec_septic":    st.session_state.get("rec_septic", False),
-            "rec_home_insp": st.session_state.get("rec_home_insp", False),
-            "rec_staging":   st.session_state.get("rec_staging", False),
-            "rec_clean":     st.session_state.get("rec_clean", False),
+            "rec_spring":      st.session_state.get("rec_spring", False),
+            "rec_septic":      st.session_state.get("rec_septic", False),
+            "rec_home_insp":   st.session_state.get("rec_home_insp", False),
+            "rec_staging":     st.session_state.get("rec_staging", False),
+            "rec_clean":       st.session_state.get("rec_clean", False),
             "rec_subdivision": st.session_state.get("rec_subdivision", False),
-            "rec_painting":  st.session_state.get("rec_painting", False),
+            "rec_painting":    st.session_state.get("rec_painting", False),
         },
     }
 
@@ -167,13 +154,6 @@ def _load_session_from_dict(d: dict):
     if "subject" in d:
         st.session_state.subject_data = d["subject"]
         st.session_state.subject_searched = bool(d["subject"].get("street_address"))
-    if "comps" in d:
-        loaded = d["comps"]
-        # Always keep exactly 3 slots
-        while len(loaded) < 3:
-            loaded.append(empty_comp())
-        st.session_state.comps_data = loaded[:3]
-        st.session_state.comp_searched = [bool(c.get("address")) for c in loaded[:3]]
     for key in ("price_low", "price_high", "price_notes", "agent_notes"):
         if key in d:
             st.session_state[key] = d[key]
@@ -441,97 +421,9 @@ if subj_street or st.session_state.subject_searched:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 2 — COMPARABLE PROPERTIES
+# STEP 2 — PRICING
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 2 — Comparable Properties</div>', unsafe_allow_html=True)
-st.markdown(
-    "*Enter addresses and click **Look Up** to auto-fill from public web data. "
-    "All fields are editable — override anything.*"
-)
-
-for comp_idx in range(3):
-    comp_colors = [PINK, "#2196F3", "#4CAF50"]
-    comp_color = comp_colors[comp_idx]
-    with st.expander(f"Comparable #{comp_idx + 1}", expanded=True):
-        cc1, cc2 = st.columns([3, 1])
-        with cc1:
-            addr_val = st.text_input(
-                f"Comp #{comp_idx+1} Address",
-                value=st.session_state.comps_data[comp_idx].get("address", ""),
-                placeholder="456 Oak Road, Woodstock, VT 05091",
-                key=f"comp_addr_{comp_idx}",
-            )
-            st.session_state.comps_data[comp_idx]["address"] = addr_val
-        with cc2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            lookup_comp = st.button(f"🔍 Look Up", key=f"lookup_comp_{comp_idx}", use_container_width=True)
-
-        if lookup_comp and addr_val:
-            with st.spinner(f"Searching public records for Comp #{comp_idx+1}…"):
-                result = get_property_data(addr_val)
-            z = result.get("zillow", {})
-            geo = result.get("geocode", {})
-            cd = st.session_state.comps_data[comp_idx]
-            cd.update({
-                "beds": z.get("beds"),
-                "baths": z.get("baths"),
-                "sqft": z.get("sqft"),
-                "lot_acres": z.get("lot_acres"),
-                "year_built": z.get("year_built"),
-                "sale_price": z.get("sale_price"),
-                "days_on_market": z.get("days_on_market"),
-                "garage": z.get("garage"),
-                "property_type": z.get("property_type"),
-                "description": z.get("description", ""),
-                "source": z.get("source", "Public Records"),
-                "lat": geo.get("lat"),
-                "lng": geo.get("lng"),
-                "url": z.get("url"),
-            })
-            st.session_state.comp_searched[comp_idx] = True
-            found = [k for k in ["beds","baths","sqft","year_built","sale_price"] if z.get(k)]
-            source_label = z.get("source", "public records")
-            if found:
-                st.success(f"✅ Found from {source_label}: {', '.join(found)}")
-                st.caption("Fill in anything missing below.")
-            else:
-                st.info("ℹ️ No public listing data found for this address. Fill in details manually below.")
-
-        # Detail fields for comp
-        cd = st.session_state.comps_data[comp_idx]
-        fc1, fc2, fc3 = st.columns(3)
-        with fc1:
-            cd["beds"] = st.number_input(f"Bedrooms", min_value=0, max_value=20,
-                value=int(cd["beds"]) if cd.get("beds") else 0, key=f"c{comp_idx}_beds")
-            cd["baths"] = st.number_input(f"Bathrooms", min_value=0.0, max_value=20.0, step=0.5,
-                value=float(cd["baths"]) if cd.get("baths") else 0.0, key=f"c{comp_idx}_baths")
-            cd["garage"] = st.number_input(f"Garage Spaces", min_value=0, max_value=10,
-                value=int(cd["garage"]) if cd.get("garage") else 0, key=f"c{comp_idx}_garage")
-        with fc2:
-            cd["sqft"] = st.number_input(f"Living Area (sq ft)", min_value=0, max_value=20000,
-                value=int(cd["sqft"]) if cd.get("sqft") else 0, key=f"c{comp_idx}_sqft")
-            cd["lot_acres"] = st.number_input(f"Lot (acres)", min_value=0.0, max_value=1000.0, step=0.1,
-                value=float(cd["lot_acres"]) if cd.get("lot_acres") else 0.0, key=f"c{comp_idx}_lot")
-            cd["year_built"] = st.number_input(f"Year Built", min_value=1700, max_value=2030,
-                value=int(cd["year_built"]) if cd.get("year_built") else 1990, key=f"c{comp_idx}_year")
-        with fc3:
-            cd["sale_price"] = st.number_input(f"Sale Price ($)", min_value=0,
-                value=int(cd["sale_price"]) if cd.get("sale_price") else 0, key=f"c{comp_idx}_price")
-            cd["days_on_market"] = st.number_input(f"Days on Market", min_value=0, max_value=2000,
-                value=int(cd["days_on_market"]) if cd.get("days_on_market") else 0, key=f"c{comp_idx}_dom")
-            cd["property_type"] = st.selectbox(f"Property Type",
-                ["Single Family", "Multi Family", "Condo", "Land", "Commercial", "Other"],
-                key=f"c{comp_idx}_type")
-        cd["finishes_note"] = st.text_area(f"Finish Quality / Notes",
-            placeholder="e.g. Updated baths, original kitchen, laminate floors...",
-            value=cd.get("finishes_note", ""), key=f"c{comp_idx}_finishes")
-
-st.markdown("---")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 3 — PRICING
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 3 — Price Recommendation</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 2 — Price Recommendation</div>', unsafe_allow_html=True)
 
 p1, p2 = st.columns(2)
 with p1:
@@ -550,7 +442,7 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 4 — RECOMMENDATIONS CHECKLIST
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 4 — Agent Recommendations</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 3 — Agent Recommendations</div>', unsafe_allow_html=True)
 st.markdown("*Check all that apply — detailed language will be written into the report automatically.*")
 
 rec_col1, rec_col2 = st.columns(2)
@@ -567,9 +459,9 @@ with rec_col2:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 5 — AGENT NOTES
+# STEP 4 — AGENT NOTES
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 5 — Agent Notes</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 4 — Agent Notes</div>', unsafe_allow_html=True)
 st.markdown("*Your personal notes — these will appear as a dedicated section in the final PDF.*")
 
 # Pre-fill from sidebar PDF extraction if available
@@ -598,9 +490,9 @@ agent_notes = st.text_area(
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 6 — MAP PREVIEW
+# STEP 5 — MAP PREVIEW
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 6 — Location Map Preview</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 5 — Location Map Preview</div>', unsafe_allow_html=True)
 
 valid_comps_for_map = [
     c for c in st.session_state.comps_data
@@ -611,33 +503,24 @@ subj_for_map = st.session_state.subject_data
 
 show_map = st.button("🗺️ Generate Map Preview", key="gen_map_btn")
 if show_map:
-    # Geocode any comps that weren't auto-searched
     with st.spinner("Building location map…"):
         if not subj_for_map.get("lat") and subj_street and subj_city:
             geo = geocode_address(f"{subj_street}, {subj_city}")
             subj_for_map["lat"] = geo.get("lat")
             subj_for_map["lng"] = geo.get("lng")
 
-        for cd in st.session_state.comps_data:
-            if cd.get("address") and not cd.get("lat"):
-                geo = geocode_address(cd["address"])
-                cd["lat"] = geo.get("lat")
-                cd["lng"] = geo.get("lng")
-                time.sleep(0.3)
-
-        active_comps = [c for c in st.session_state.comps_data if c.get("address")]
-        m = build_comparison_map(subj_for_map, active_comps)
+        m = build_comparison_map(subj_for_map, [])
 
     from streamlit_folium import st_folium
     st_folium(m, width=700, height=450, returned_objects=[])
-    st.caption("★ Pink = Subject Property  |  ● Numbered = Comparable Properties")
+    st.caption("★ Pink = Subject Property")
 
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 7 — OTHER CMA FORMAT PDF (strip first 2 pages)
+# STEP 6 — OTHER CMA FORMAT PDF (strip first 2 pages)
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 7 — Attach Other CMA Report (Optional)</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 6 — Attach Other CMA Report (Optional)</div>', unsafe_allow_html=True)
 st.markdown(
     "Upload your other CMA format PDF here — e.g. from your MLS or third-party CMA tool. "
     "**Pages 1 and 2 will be automatically stripped** (cover/title pages) and the rest will be "
@@ -676,9 +559,9 @@ if supplemental_pdf_file:
 st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STEP 8 — ANR MAP
+# STEP 7 — ANR MAP
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">Step 8 — Vermont ANR Natural Resource Map</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Step 7 — Vermont ANR Natural Resource Map</div>', unsafe_allow_html=True)
 st.markdown(
     "The Vermont ANR (Agency of Natural Resources) Atlas shows wetlands, floodplains, soil types, "
     "conservation land, and other natural resource data — very useful for land and rural properties. "
@@ -703,7 +586,6 @@ with anr_col2:
 
 if gen_anr and anr_manual_address:
     with st.spinner("Looking up coordinates for ANR map…"):
-        from property_research import search_vermont_anr_map
         anr_result = search_vermont_anr_map(anr_manual_address)
         _anr_url = anr_result.get("anr_atlas_url")
         if _anr_url:
@@ -735,7 +617,7 @@ st.markdown('<div class="section-label">Generate CMA Report</div>', unsafe_allow
 st.info(
     "📋 **What gets generated:**\n"
     "1. **HC Cover Page** (always included automatically)\n"
-    "2. **CMA Content** — property details, comparables, price recommendation, recommendations & notes\n"
+    "2. **CMA Content** — subject property details, price recommendation, recommendations & notes\n"
     "3. **ANR Map link** — printed in the PDF for easy reference *(if generated)*\n"
     "4. **Other CMA Report** — your uploaded PDF minus its first 2 pages *(if uploaded)*",
     icon=None,
@@ -769,25 +651,15 @@ if generate:
     # Attach agent notes to subject dict so doc_builder can include them
     sd["agent_notes"] = agent_notes
 
-    active_comps = [c for c in st.session_state.comps_data if c.get("address")]
-
     with st.spinner("Building your CMA PDF…"):
-        # Geocode any missing coordinates
+        # Geocode subject if needed
         if not sd.get("lat") and sd.get("address"):
             geo = geocode_address(sd["address"])
             sd["lat"] = geo.get("lat")
             sd["lng"] = geo.get("lng")
 
-        for cd in active_comps:
-            if not cd.get("lat") and cd.get("address"):
-                geo = geocode_address(cd["address"])
-                cd["lat"] = geo.get("lat")
-                cd["lng"] = geo.get("lng")
-                time.sleep(0.3)
-
         anr_url = sd.get("anr_url")
         if not anr_url and sd.get("lat") and sd.get("lng"):
-            from property_research import search_vermont_anr_map
             anr_data = search_vermont_anr_map(sd["address"])
             anr_url = anr_data.get("anr_atlas_url")
 
@@ -801,7 +673,7 @@ if generate:
         try:
             pdf_bytes = merge_cma_pdf(
                 subject=sd,
-                comps=active_comps,
+                comps=[],
                 recommendations=recs,
                 price_low=int(price_low),
                 price_high=int(price_high),
