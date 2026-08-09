@@ -18,7 +18,7 @@ from map_builder import build_comparison_map
 from pdf_builder import merge_cma_pdf
 
 # ── App Config ─────────────────────────────────────────────────────────────────
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.9.0"
 NAVY = "#173348"
 PINK = "#E91E63"
 
@@ -745,6 +745,25 @@ if st.session_state.get("pdf_bytes"):
         + (" + ANR Map" if anr_pdf_file else "")
         + "  |  💾 **Session file** — upload this to reopen and edit later"
     )
+
+# ── Version History ────────────────────────────────────────────────────────────
+st.markdown("---")
+with st.expander("📋 Version History", expanded=False):
+    st.markdown(f"""
+| Version | Date | What Changed |
+|---------|------|-------------|
+| **v1.9.0** | Aug 9, 2026 | Removed sale price field from subject property; removed Comparable Properties side-by-side table from PDF |
+| **v1.8.0** | Aug 9, 2026 | Added fuel types (multi-select), private septic, private well, view, solar, and boundary notes fields to subject property |
+| **v1.7.0** | Aug 9, 2026 | Replaced ANR link generator with simple PDF upload; ANR map appended as-is to final PDF |
+| **v1.6.0** | Aug 9, 2026 | Removed comparable property fields entirely — handled by separate program |
+| **v1.5.1** | Aug 9, 2026 | Streamlit Cloud deployment config; app live at hc-cma.streamlit.app |
+| **v1.5.0** | Aug 9, 2026 | Added ANR map section and clearer "Other CMA Report" PDF upload labeling |
+| **v1.4.0** | Aug 9, 2026 | Sidebar: upload existing CMA PDF, extract Agent Notes, edit and regenerate |
+| **v1.3.0** | Aug 9, 2026 | Save & reload sessions — JSON file saves all fields; auto-generated on every PDF download |
+| **v1.2.0** | Aug 9, 2026 | Switched to native PDF generation via ReportLab — no Microsoft Word required |
+| **v1.1.0** | Aug 9, 2026 | PDF output; HC cover page always prepended; Agent Notes section; supplemental PDF upload (strips first 2 pages); double-click launcher |
+| **v1.0.0** | Aug 9, 2026 | Initial release — subject property lookup, comparables, price recommendation, recommendations checklist, map, Word doc output |
+""")
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
