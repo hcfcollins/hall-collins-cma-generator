@@ -397,8 +397,6 @@ if subj_street or st.session_state.subject_searched:
             sd["garage"] = st.number_input("Garage Spaces", min_value=0, max_value=10,
                                             value=int(sd["garage"]) if sd.get("garage") else 0, key="s_garage")
         with dc2:
-            sd["sqft"] = st.number_input("Living Area (sq ft)", min_value=0, max_value=20000,
-                                          value=int(sd["sqft"]) if sd.get("sqft") else 0, key="s_sqft")
             sd["lot_acres"] = st.number_input("Lot Size (acres)", min_value=0.0, max_value=1000.0, step=0.1,
                                                value=float(sd["lot_acres"]) if sd.get("lot_acres") else 0.0, key="s_lot")
             sd["year_built"] = st.number_input("Year Built", min_value=1700, max_value=2030,
@@ -407,8 +405,6 @@ if subj_street or st.session_state.subject_searched:
             sd["property_type"] = st.selectbox("Property Type",
                 ["Single Family", "Multi Family", "Condo", "Land", "Commercial", "Other"],
                 index=0, key="s_type")
-            sd["days_on_market"] = st.number_input("Days on Market", min_value=0, max_value=1000,
-                                                    value=int(sd["days_on_market"]) if sd.get("days_on_market") else 0, key="s_dom")
         sd["features_notes"] = st.text_area("Notable Features / Highlights",
             placeholder="e.g. Original hardwood floors, updated kitchen, mountain views, wrap-around porch...",
             value=sd.get("features_notes", ""), key="s_features")

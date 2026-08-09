@@ -186,15 +186,6 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_not
 
     mid = int((price_low + price_high) / 2)
 
-    price_data = [[
-        [Paragraph("Recommended Low", s["price_label"]),
-         Paragraph(f"${price_low:,}", s["price_big"])],
-        [Paragraph("Target List Price", s["price_label_white"]),
-         Paragraph(f"${mid:,}", s["price_big_white"])],
-        [Paragraph("Recommended High", s["price_label"]),
-         Paragraph(f"${price_high:,}", s["price_big"])],
-    ]]
-
     flat_data = [[
         Table([[Paragraph("Recommended Low", s["price_label"])],
                [Paragraph(f"${price_low:,}", s["price_big"])]], colWidths=[2.1*inch]),
@@ -213,33 +204,25 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_not
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 12),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
     ]))
     elems.append(price_tbl)
-    elems.append(Spacer(1, 12))
+    elems.append(Spacer(1, 10))
 
-    # Comp analysis
-    comp_prices = [c.get("sale_price") for c in comps[:3] if c.get("sale_price")]
-    if comp_prices:
-        avg = int(sum(comp_prices) / len(comp_prices))
-        lo = min(comp_prices)
-        hi = max(comp_prices)
-        elems.append(Paragraph(
-            f"<b>Comparable Sales Summary:</b>  Based on {len(comp_prices)} comparable sale(s), "
-            f"the range was ${lo:,} – ${hi:,} with an average of ${avg:,}.",
-            s["body"]))
-
-    subj_sqft = subject.get("sqft")
-    if subj_sqft and comp_prices:
-        ppsf_list = [c["sale_price"] / c["sqft"] for c in comps[:3]
-                     if c.get("sqft") and c.get("sale_price")]
-        if ppsf_list:
-            avg_ppsf = sum(ppsf_list) / len(ppsf_list)
-            implied = int(avg_ppsf * subj_sqft)
-            elems.append(Paragraph(
-                f"<b>Price Per Sq Ft Analysis:</b>  Avg comp: ${avg_ppsf:.0f}/sq ft — "
-                f"applied to {int(subj_sqft):,} sq ft implies ~${implied:,}.",
-                s["body"]))
+    # High price note
+    high_note_style = ParagraphStyle(
+        "high_note", fontName="Times-Italic", fontSize=9,
+        textColor=NAVY, backColor=STEEL,
+        leftIndent=10, rightIndent=10,
+        spaceBefore=4, spaceAfter=8, leading=13, borderPad=6,
+    )
+    elems.append(Paragraph(
+        f"<b>To achieve the high end of ${price_high:,}:</b>  The property must be in Instagram-worthy, "
+        "top-notch condition — full inspection reports available and on hand, all smoke and carbon "
+        "monoxide detectors up to date, exceptionally clean throughout, and absolutely no smell of "
+        "animals or pets.",
+        high_note_style,
+    ))
+    elems.append(Spacer(1, 8))
 
     if price_notes and price_notes.strip():
         elems.append(Paragraph(
