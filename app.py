@@ -550,11 +550,6 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">Step 5 — Location Map Preview</div>', unsafe_allow_html=True)
 
-valid_comps_for_map = [
-    c for c in st.session_state.comps_data
-    if c.get("address") and (c.get("lat") or c.get("address"))
-]
-
 subj_for_map = st.session_state.subject_data
 
 show_map = st.button("🗺️ Generate Map Preview", key="gen_map_btn")
