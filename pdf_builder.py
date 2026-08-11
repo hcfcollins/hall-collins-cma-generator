@@ -17,7 +17,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     HRFlowable, PageBreak, KeepTogether,
@@ -47,10 +47,12 @@ def _styles():
         "h2": ParagraphStyle("h2", fontName="Times-Bold", fontSize=12,
                              textColor=PINK, spaceAfter=4, spaceBefore=10),
         "body": ParagraphStyle("body", fontName="Times-Roman", fontSize=10,
-                               textColor=DGRAY, spaceAfter=6, leading=14),
+                               textColor=DGRAY, spaceAfter=6, leading=14,
+                               alignment=TA_JUSTIFY),
         "body_indent": ParagraphStyle("body_indent", fontName="Times-Roman",
                                       fontSize=10, textColor=DGRAY,
-                                      spaceAfter=6, leading=14, leftIndent=18),
+                                      spaceAfter=6, leading=14, leftIndent=18,
+                                      alignment=TA_JUSTIFY),
         "label": ParagraphStyle("label", fontName="Times-Bold", fontSize=9,
                                 textColor=NAVY),
         "caption": ParagraphStyle("caption", fontName="Times-Italic", fontSize=9,
@@ -189,17 +191,18 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
     from reportlab.graphics.shapes import Drawing, Rect, Polygon, Line, String
     from reportlab.graphics import renderPDF
 
-    bar_w = 6.0 * inch
+    bar_w = 7.0 * inch   # nearly full page width (margins = 0.75" each side)
     bar_h = 28
-    draw_h = 95
+    draw_h = 75
     d = Drawing(bar_w, draw_h)
 
+    bar_y = draw_h - bar_h  # top of bar
+
     # Gradient bar segments (low=steel → mid=pink → high=navy)
-    segments = 60
+    segments = 80
     seg_w = bar_w / segments
     for i in range(segments):
         t = i / segments
-        # interpolate STEEL(#EEF1F4) → PINK(#E91E63) → NAVY(#173348)
         if t < 0.5:
             t2 = t * 2
             r = int(0xEE + (0xE9 - 0xEE) * t2)
@@ -211,8 +214,17 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
             g = int(0x1E + (0x33 - 0x1E) * t2)
             b = int(0x63 + (0x48 - 0x63) * t2)
         seg_color = colors.Color(r/255, g/255, b/255)
-        d.add(Rect(i * seg_w, draw_h - bar_h - 30, seg_w + 0.5, bar_h,
+        d.add(Rect(i * seg_w, bar_y, seg_w + 0.5, bar_h,
                    fillColor=seg_color, strokeColor=None))
+
+    # Price labels below the bar
+    label_y = bar_y - 14
+    d.add(String(0, label_y, f"${price_low:,}",
+                 fontName="Times-Roman", fontSize=8,
+                 fillColor=colors.HexColor("#555555"), textAnchor="start"))
+    d.add(String(bar_w, label_y, f"${price_high:,}",
+                 fontName="Times-Roman", fontSize=8,
+                 fillColor=colors.HexColor("#555555"), textAnchor="end"))
 
     # Arrow marker at recommended price position
     if price_high > price_low:
@@ -221,41 +233,32 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
         ratio = 0.5
     ratio = max(0.02, min(0.98, ratio))
     arrow_x = ratio * bar_w
-    arrow_y_base = draw_h - bar_h - 30  # bottom of bar
-    arrow_tip_y = arrow_y_base - 18
 
-    # Triangle arrow pointing up into the bar
+    # Triangle arrow pointing up into the bar from below
+    arrow_tip_y = bar_y - 1
+    arrow_base_y = bar_y - 14
     d.add(Polygon(
-        [arrow_x - 8, arrow_tip_y,
-         arrow_x + 8, arrow_tip_y,
-         arrow_x, arrow_y_base],
+        [arrow_x - 7, arrow_base_y,
+         arrow_x + 7, arrow_base_y,
+         arrow_x, arrow_tip_y],
         fillColor=colors.HexColor("#173348"),
         strokeColor=None,
     ))
-    # Vertical stem
-    d.add(Line(arrow_x, arrow_tip_y - 12, arrow_x, arrow_tip_y,
-               strokeColor=colors.HexColor("#173348"), strokeWidth=2))
-
-    # Recommended price label below arrow
-    rec_label = String(arrow_x, arrow_tip_y - 24,
-                       f"Our Recommendation: ${price_rec:,}",
-                       fontName="Times-Bold", fontSize=9,
-                       fillColor=colors.HexColor("#173348"),
-                       textAnchor="middle")
-    d.add(rec_label)
-
-    # Low label
-    d.add(String(0, draw_h - bar_h - 14,
-                 f"${price_low:,}",
-                 fontName="Times-Roman", fontSize=8,
-                 fillColor=colors.HexColor("#555555"), textAnchor="start"))
-    # High label
-    d.add(String(bar_w, draw_h - bar_h - 14,
-                 f"${price_high:,}",
-                 fontName="Times-Roman", fontSize=8,
-                 fillColor=colors.HexColor("#555555"), textAnchor="end"))
 
     elems.append(d)
+    elems.append(Spacer(1, 4))
+
+    # ── Prominent recommended price display ───────────────────────────────────
+    rec_style = ParagraphStyle(
+        "rec_price", fontName="Times-Bold", fontSize=16,
+        textColor=NAVY, alignment=TA_CENTER, spaceAfter=4,
+    )
+    rec_sub_style = ParagraphStyle(
+        "rec_sub", fontName="Times-Italic", fontSize=9,
+        textColor=MGRAY, alignment=TA_CENTER, spaceAfter=8,
+    )
+    elems.append(Paragraph(f"Our Recommended List Price: ${price_rec:,}", rec_style))
+    elems.append(Paragraph("Based on current market conditions and property assessment", rec_sub_style))
     elems.append(Spacer(1, 6))
 
     # ── Condition notes on low / high ends ───────────────────────────────────
@@ -319,10 +322,16 @@ def _build_research_notes(subject, recommendations, s):
             "is significantly higher between April and June, which typically supports stronger "
             "offers and shorter days on market."),
         "septic_inspection": ("🔍 Septic Inspection Recommended in Advance",
-            "Vermont buyers frequently request septic inspections, and an unexpected failure "
-            "can delay or derail a closing. We strongly recommend having the septic system "
-            "professionally inspected prior to listing. A clean report is a powerful marketing "
-            "tool and removes a major point of buyer uncertainty."),
+            "We would recommend getting a septic inspection done prior to listing. This is one of the best "
+            "ways to set yourself up for a smooth, stress-free sale! Because a septic system is hidden "
+            "underground, it's naturally one of those big mystery areas that makes buyers extra cautious. "
+            "If they don't know what they are getting into, they will 99 times out of 100 inspect it. "
+            "Coming in to the transaction knowing what condition it is in can make you as the seller look "
+            "extremely thoughtful and prepared as well as relieve any anxiety. It's actually one of the "
+            "top reasons deals fall through or homes end up back on the market. By inspecting it early, "
+            "you take all the guesswork off the table so you can price with confidence and avoid "
+            "last-minute negotiation surprises. We can easily connect you with a few local inspectors "
+            "to help get you started!"),
         "home_inspection": ("🏠 Home Inspection Recommended in Advance",
             "A pre-listing home inspection allows you to identify and address issues on your "
             "own timeline and budget — rather than during contract negotiations. This builds "
@@ -350,10 +359,15 @@ def _build_research_notes(subject, recommendations, s):
         for key in recommendations:
             if key in rec_map:
                 title, body = rec_map[key]
+                body_style = ParagraphStyle(
+                    "rec_body", fontName="Times-Roman", fontSize=10,
+                    textColor=DGRAY, leading=14, leftIndent=18,
+                    alignment=TA_JUSTIFY, spaceAfter=2,
+                )
                 elems.append(KeepTogether([
-                    Paragraph(f"<b>{title}</b>", s["body"]),
-                    Paragraph(body, s["body_indent"]),
-                    Spacer(1, 4),
+                    Paragraph(f"<b>{title}</b>", s["h2"]),
+                    Paragraph(body, body_style),
+                    Spacer(1, 2),
                 ]))
 
     elems.append(Spacer(1, 12))
