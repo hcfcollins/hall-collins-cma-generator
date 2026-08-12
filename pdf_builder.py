@@ -323,8 +323,7 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
         "We pride ourselves in our firm that we don't attempt to inflate the value to win the listing. "
         "This is where we earnestly feel as though the property will settle on the market. We are not "
         "perfect and this is not an exact science, but we want to work together with you as a team. "
-        "The more you put in, the more we can help you too. We love what we do and we want you to have "
-        "as seamless of an experience as possible!",
+        "We love what we do and we want you to have as seamless of an experience as possible!",
         philosophy_style,
     ))
     elems.append(Spacer(1, 12))
