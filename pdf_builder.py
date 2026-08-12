@@ -184,7 +184,8 @@ def _build_subject_overview(subject, s):
 
 
 def _build_price_recommendation(subject, comps, price_low, price_high, price_rec, price_notes, s):
-    elems = _section_header("Price Recommendation", s)
+    elems = [PageBreak()]
+    elems += _section_header("Price Recommendation", s)
 
     # ── Visual price scale ────────────────────────────────────────────────────
     from reportlab.graphics.shapes import Drawing, Rect, Polygon, String
@@ -296,7 +297,8 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
         textColor=MGRAY, alignment=TA_CENTER, spaceAfter=10,
     )
     elems.append(Paragraph(f"Our Recommended List Price: ${price_rec:,}", rec_style))
-    elems.append(Paragraph("Based on current market conditions and property assessment", rec_sub_style))
+    elems.append(HRFlowable(width="60%", thickness=0.5, color=PINK, spaceAfter=6, spaceBefore=6, hAlign="CENTER"))
+    elems.append(Paragraph("Based on current market conditions", rec_sub_style))
     elems.append(Spacer(1, 14))
 
     # ── Agent pricing notes ───────────────────────────────────────────────────
@@ -308,9 +310,10 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
     # ── Firm philosophy note ──────────────────────────────────────────────────
     philosophy_style = ParagraphStyle(
         "philosophy", fontName="Times-Italic", fontSize=9,
-        textColor=NAVY, backColor=colors.HexColor("#FFF8FB"),
-        leftIndent=10, rightIndent=10,
-        spaceBefore=4, spaceAfter=4, leading=14, borderPad=8,
+        textColor=NAVY,
+        leftIndent=0, rightIndent=0,
+        spaceBefore=4, spaceAfter=4, leading=14,
+        alignment=TA_JUSTIFY,
     )
     elems.append(Paragraph(
         "We pride ourselves in our firm that we don't attempt to inflate the value to win the listing. "
@@ -449,7 +452,18 @@ def _make_page_template(canvas, doc, logo_path):
     canvas.saveState()
     w, h = letter
 
-    # Footer
+    # Logo in footer (left side)
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo_h = 0.3 * inch
+            logo_w = logo_h * 3.5  # approximate aspect ratio
+            canvas.drawImage(logo_path, 0.75 * inch, 0.25 * inch,
+                             width=logo_w, height=logo_h,
+                             preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+
+    # Footer text (centered)
     canvas.setFont("Times-Italic", 8)
     canvas.setFillColor(MGRAY)
     footer_text = (
