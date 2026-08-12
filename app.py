@@ -714,6 +714,21 @@ if generate:
             st.session_state["_save_json"] = json.dumps(_session_to_dict(), indent=2, default=str)
             slug = re.sub(r"[^a-zA-Z0-9]", "_", sd.get("street_address", "CMA"))
             st.session_state["_save_filename"] = f"CMA_session_{slug}_{date.today().isoformat()}.json"
+
+            # ── Auto-upload to Dropbox ────────────────────────────────────────
+            try:
+                from dropbox_upload import upload_cma_to_dropbox
+                pdf_filename = f"CMA_{slug}_{date.today().isoformat()}.pdf"
+                ok, msg = upload_cma_to_dropbox(pdf_bytes, pdf_filename)
+                if ok:
+                    st.success(msg)
+                else:
+                    # Only show warning if credentials were actually set
+                    if "not configured" not in msg:
+                        st.warning(f"⚠️ Dropbox upload: {msg}")
+            except Exception as _dbx_err:
+                st.warning(f"⚠️ Dropbox upload skipped: {_dbx_err}")
+
             st.success("✅ CMA PDF generated successfully!")
         except FileNotFoundError as e:
             st.error(str(e))
