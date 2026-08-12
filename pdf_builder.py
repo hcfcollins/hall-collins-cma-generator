@@ -118,7 +118,7 @@ def _build_subject_overview(subject, s):
     if subject.get("lot_acres"):
         rows.append(_row("Lot Size", _fmt(subject["lot_acres"], suffix=" acres")))
     if subject.get("year_built"):
-        rows.append(_row("Year Built", _fmt(subject["year_built"])))
+        rows.append(_row("Year Built", str(int(subject["year_built"]))))
     if subject.get("garage"):
         rows.append(_row("Garage Spaces", _fmt(subject["garage"])))
 
@@ -359,13 +359,19 @@ def _build_research_notes(subject, recommendations, s):
         for key in recommendations:
             if key in rec_map:
                 title, body = rec_map[key]
+                bullet_title_style = ParagraphStyle(
+                    "rec_title", fontName="Times-Bold", fontSize=11,
+                    textColor=PINK, leading=15, leftIndent=14, bulletIndent=0,
+                    bulletFontName="Times-Roman", bulletFontSize=13,
+                    bulletColor=PINK, spaceAfter=1, spaceBefore=6,
+                )
                 body_style = ParagraphStyle(
                     "rec_body", fontName="Times-Roman", fontSize=10,
                     textColor=DGRAY, leading=14, leftIndent=18,
                     alignment=TA_JUSTIFY, spaceAfter=2,
                 )
                 elems.append(KeepTogether([
-                    Paragraph(f"<b>{title}</b>", s["h2"]),
+                    Paragraph(f"<bullet>\u2022</bullet><b>{title}</b>", bullet_title_style),
                     Paragraph(body, body_style),
                     Spacer(1, 2),
                 ]))
