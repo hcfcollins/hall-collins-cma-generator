@@ -447,32 +447,38 @@ def _make_page_template(canvas, doc, logo_path):
     # Logo in footer (left side)
     if logo_path and os.path.exists(logo_path):
         try:
-            logo_h = 0.3 * inch
+            logo_h = 0.45 * inch
             logo_w = logo_h * 3.5  # approximate aspect ratio
-            canvas.drawImage(logo_path, 0.75 * inch, 0.25 * inch,
+            canvas.drawImage(logo_path, 0.75 * inch, 0.18 * inch,
                              width=logo_w, height=logo_h,
                              preserveAspectRatio=True, mask="auto")
         except Exception:
             pass
 
-    # Footer text (centered)
-    canvas.setFont("Times-Italic", 8)
+    # Footer rule
+    canvas.setStrokeColor(PINK)
+    canvas.setLineWidth(0.5)
+    canvas.line(0.75 * inch, 0.72 * inch, w - 0.75 * inch, 0.72 * inch)
+
+    # Footer — main line
+    canvas.setFont("Times-Italic", 9)
     canvas.setFillColor(MGRAY)
     footer_text = (
         f"Hall Collins Real Estate Group  |  Comparative Market Analysis  |  "
         f"Confidential  |  {date.today().strftime('%B %Y')}"
     )
-    canvas.drawCentredString(w / 2, 0.45 * inch, footer_text)
+    canvas.drawCentredString(w / 2, 0.57 * inch, footer_text)
 
-    # Footer rule
-    canvas.setStrokeColor(PINK)
-    canvas.setLineWidth(0.5)
-    canvas.line(0.75 * inch, 0.6 * inch, w - 0.75 * inch, 0.6 * inch)
+    # Footer — phone numbers line
+    canvas.setFont("Times-Roman", 8)
+    canvas.setFillColor(MGRAY)
+    phone_text = "Holly Hall: (802) 431-3421   |   Fran Collins: (802) 272-3533"
+    canvas.drawCentredString(w / 2, 0.42 * inch, phone_text)
 
     # Page number
     canvas.setFont("Times-Roman", 8)
     canvas.setFillColor(MGRAY)
-    canvas.drawRightString(w - 0.75 * inch, 0.3 * inch, f"Page {doc.page}")
+    canvas.drawRightString(w - 0.75 * inch, 0.27 * inch, f"Page {doc.page}")
 
     canvas.restoreState()
 
@@ -490,7 +496,7 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
         leftMargin=0.75 * inch,
         rightMargin=0.75 * inch,
         topMargin=0.75 * inch,
-        bottomMargin=0.85 * inch,
+        bottomMargin=1.0 * inch,
     )
 
     s = _styles()
