@@ -236,17 +236,15 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
 
     elems.append(Spacer(1, 8))
     elems.append(d)
-    elems.append(Spacer(1, 10))
+    elems.append(Spacer(1, 4))
 
     # ── Price range labels below bar ─────────────────────────────────────────
-    price_range_style = ParagraphStyle(
-        "price_range", fontName="Times-Roman", fontSize=9,
-        textColor=colors.HexColor("#555555"),
-    )
     range_data = [[
-        Paragraph(f"<b>${price_low:,}</b>", price_range_style),
+        Paragraph(f"<b>${price_low:,}</b>",
+                  ParagraphStyle("pr_left", fontName="Times-Bold", fontSize=11,
+                                 textColor=colors.HexColor("#555555"))),
         Paragraph(f"<b>${price_high:,}</b>",
-                  ParagraphStyle("pr_right", fontName="Times-Roman", fontSize=9,
+                  ParagraphStyle("pr_right", fontName="Times-Bold", fontSize=11,
                                  textColor=colors.HexColor("#555555"), alignment=TA_RIGHT)),
     ]]
     range_tbl = Table(range_data, colWidths=[3.5*inch, 3.5*inch])
@@ -258,7 +256,24 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     elems.append(range_tbl)
-    elems.append(Spacer(1, 4))
+    elems.append(Spacer(1, 8))
+
+    # ── "Why is there a range?" explanation ──────────────────────────────────
+    why_header_style = ParagraphStyle(
+        "why_h", fontName="Times-Bold", fontSize=11,
+        textColor=NAVY, spaceAfter=4, spaceBefore=2,
+    )
+    why_body_style = ParagraphStyle(
+        "why_body", fontName="Times-Roman", fontSize=10,
+        textColor=DGRAY, leading=14, alignment=TA_JUSTIFY, spaceAfter=6,
+    )
+    elems.append(Paragraph("Why is there a range?", why_header_style))
+    elems.append(Paragraph(
+        "Pricing is an art, not a science. We believe any sale is a team effort between us as your "
+        "agents and you as the seller. The more prepared you are, the higher the price you can generate "
+        "and vice versa. If you would prefer to sell it without the hassle, we need to price it "
+        "accordingly to keep those projects in mind.",
+        why_body_style))
 
     # ── Condition notes stacked ───────────────────────────────────────────────
     condition_style = ParagraphStyle(
@@ -464,16 +479,10 @@ def _make_page_template(canvas, doc, logo_path):
     canvas.setFont("Times-Italic", 9)
     canvas.setFillColor(MGRAY)
     footer_text = (
-        f"Hall Collins Real Estate Group  |  Comparative Market Analysis  |  "
+        f"Comparative Market Analysis  |  "
         f"Confidential  |  {date.today().strftime('%B %Y')}"
     )
-    canvas.drawCentredString(w / 2, 0.57 * inch, footer_text)
-
-    # Footer — phone numbers line
-    canvas.setFont("Times-Roman", 8)
-    canvas.setFillColor(MGRAY)
-    phone_text = "Holly Hall: (802) 431-3421   |   Fran Collins: (802) 272-3533"
-    canvas.drawCentredString(w / 2, 0.42 * inch, phone_text)
+    canvas.drawCentredString(w / 2, 0.5 * inch, footer_text)
 
     # Page number
     canvas.setFont("Times-Roman", 8)
