@@ -187,16 +187,15 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
     elems = _section_header("Price Recommendation", s)
 
     # ── Visual price scale ────────────────────────────────────────────────────
-    # Drawn as a ReportLab Drawing: gradient bar + arrow marker
-    from reportlab.graphics.shapes import Drawing, Rect, Polygon, Line, String
+    from reportlab.graphics.shapes import Drawing, Rect, Polygon, String
     from reportlab.graphics import renderPDF
 
-    bar_w = 7.0 * inch   # nearly full page width (margins = 0.75" each side)
-    bar_h = 28
-    draw_h = 75
+    bar_w = 7.0 * inch
+    bar_h = 32
+    draw_h = bar_h + 20   # a little breathing room above bar
     d = Drawing(bar_w, draw_h)
 
-    bar_y = draw_h - bar_h  # top of bar
+    bar_y = 10  # bar sits above bottom of drawing
 
     # Gradient bar segments (low=steel → mid=pink → high=navy)
     segments = 80
@@ -217,54 +216,54 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
         d.add(Rect(i * seg_w, bar_y, seg_w + 0.5, bar_h,
                    fillColor=seg_color, strokeColor=None))
 
-    # Price labels below the bar
-    label_y = bar_y - 14
-    d.add(String(0, label_y, f"${price_low:,}",
-                 fontName="Times-Roman", fontSize=8,
-                 fillColor=colors.HexColor("#555555"), textAnchor="start"))
-    d.add(String(bar_w, label_y, f"${price_high:,}",
-                 fontName="Times-Roman", fontSize=8,
-                 fillColor=colors.HexColor("#555555"), textAnchor="end"))
-
-    # Arrow marker at recommended price position
+    # Arrow marker pointing down from above the bar at recommended price
     if price_high > price_low:
         ratio = (price_rec - price_low) / (price_high - price_low)
     else:
         ratio = 0.5
     ratio = max(0.02, min(0.98, ratio))
     arrow_x = ratio * bar_w
-
-    # Triangle arrow pointing up into the bar from below
-    arrow_tip_y = bar_y - 1
-    arrow_base_y = bar_y - 14
+    arrow_top = bar_y + bar_h + 14   # tip of triangle points down to top of bar
+    arrow_base = bar_y + bar_h + 1
     d.add(Polygon(
-        [arrow_x - 7, arrow_base_y,
-         arrow_x + 7, arrow_base_y,
-         arrow_x, arrow_tip_y],
+        [arrow_x - 7, arrow_top,
+         arrow_x + 7, arrow_top,
+         arrow_x, arrow_base],
         fillColor=colors.HexColor("#173348"),
         strokeColor=None,
     ))
 
+    elems.append(Spacer(1, 8))
     elems.append(d)
-    elems.append(Spacer(1, 4))
+    elems.append(Spacer(1, 10))
 
-    # ── Prominent recommended price display ───────────────────────────────────
-    rec_style = ParagraphStyle(
-        "rec_price", fontName="Times-Bold", fontSize=16,
-        textColor=NAVY, alignment=TA_CENTER, spaceAfter=4,
+    # ── Price range labels below bar ─────────────────────────────────────────
+    price_range_style = ParagraphStyle(
+        "price_range", fontName="Times-Roman", fontSize=9,
+        textColor=colors.HexColor("#555555"),
     )
-    rec_sub_style = ParagraphStyle(
-        "rec_sub", fontName="Times-Italic", fontSize=9,
-        textColor=MGRAY, alignment=TA_CENTER, spaceAfter=8,
-    )
-    elems.append(Paragraph(f"Our Recommended List Price: ${price_rec:,}", rec_style))
-    elems.append(Paragraph("Based on current market conditions and property assessment", rec_sub_style))
-    elems.append(Spacer(1, 6))
+    range_data = [[
+        Paragraph(f"<b>${price_low:,}</b>", price_range_style),
+        Paragraph(f"<b>${price_high:,}</b>",
+                  ParagraphStyle("pr_right", fontName="Times-Roman", fontSize=9,
+                                 textColor=colors.HexColor("#555555"), alignment=TA_RIGHT)),
+    ]]
+    range_tbl = Table(range_data, colWidths=[3.5*inch, 3.5*inch])
+    range_tbl.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    elems.append(range_tbl)
+    elems.append(Spacer(1, 4))
 
     # ── Condition notes on low / high ends ───────────────────────────────────
     condition_style = ParagraphStyle(
-        "cond", fontName="Times-Italic", fontSize=8,
-        textColor=colors.HexColor("#555555"), leading=11,
+        "cond", fontName="Times-Italic", fontSize=9,
+        textColor=colors.HexColor("#555555"), leading=13,
+        alignment=TA_JUSTIFY,
     )
     cond_data = [[
         Paragraph(
@@ -276,16 +275,29 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
             "reports on hand, smoke detectors up to date, exceptionally clean, no smell of animals.",
             condition_style),
     ]]
-    cond_tbl = Table(cond_data, colWidths=[3.1*inch, 3.4*inch])
+    cond_tbl = Table(cond_data, colWidths=[3.4*inch, 3.6*inch])
     cond_tbl.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elems.append(cond_tbl)
-    elems.append(Spacer(1, 12))
+    elems.append(Spacer(1, 18))
+
+    # ── Prominent recommended price display ───────────────────────────────────
+    rec_style = ParagraphStyle(
+        "rec_price", fontName="Times-Bold", fontSize=17,
+        textColor=NAVY, alignment=TA_CENTER, spaceAfter=4,
+    )
+    rec_sub_style = ParagraphStyle(
+        "rec_sub", fontName="Times-Italic", fontSize=9,
+        textColor=MGRAY, alignment=TA_CENTER, spaceAfter=10,
+    )
+    elems.append(Paragraph(f"Our Recommended List Price: ${price_rec:,}", rec_style))
+    elems.append(Paragraph("Based on current market conditions and property assessment", rec_sub_style))
+    elems.append(Spacer(1, 14))
 
     # ── Agent pricing notes ───────────────────────────────────────────────────
     if price_notes and price_notes.strip():
