@@ -37,7 +37,7 @@ def upload_cma_to_dropbox(pdf_bytes: bytes, filename: str) -> tuple[bool, str]:
     app_key      = _get_secret("DROPBOX_APP_KEY")
     app_secret   = _get_secret("DROPBOX_APP_SECRET")
     refresh_token = _get_secret("DROPBOX_REFRESH_TOKEN")
-    folder       = _get_secret("DROPBOX_FOLDER", "/Hall Collins REG Team Folder/Listings/0. CMAs/CMAs")
+    folder       = _get_secret("DROPBOX_FOLDER", "/Listings/0. CMAs/CMAs")
 
     if not all([app_key, app_secret, refresh_token]):
         return False, "Dropbox credentials not configured — skipping upload."
