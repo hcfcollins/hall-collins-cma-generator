@@ -260,31 +260,20 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
     elems.append(range_tbl)
     elems.append(Spacer(1, 4))
 
-    # ── Condition notes on low / high ends ───────────────────────────────────
+    # ── Condition notes stacked ───────────────────────────────────────────────
     condition_style = ParagraphStyle(
-        "cond", fontName="Times-Italic", fontSize=9,
-        textColor=colors.HexColor("#555555"), leading=13,
-        alignment=TA_JUSTIFY,
+        "cond", fontName="Times-Roman", fontSize=9,
+        textColor=colors.HexColor("#444444"), leading=13,
+        alignment=TA_JUSTIFY, leftIndent=8, spaceAfter=4,
     )
-    cond_data = [[
-        Paragraph(
-            f"<b>${price_low:,} — As-Is:</b> Property sold in current condition, "
-            "not cleaned out, not in photo-ready condition.",
-            condition_style),
-        Paragraph(
-            f"<b>${price_high:,} — Instagram-Worthy:</b> Top-notch condition, full inspection "
-            "reports on hand, smoke detectors up to date, exceptionally clean, no smell of animals.",
-            condition_style),
-    ]]
-    cond_tbl = Table(cond_data, colWidths=[3.4*inch, 3.6*inch])
-    cond_tbl.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    elems.append(cond_tbl)
+    elems.append(Paragraph(
+        f"<b>${price_low:,} — As-Is:</b>  <i>Property sold in current condition, "
+        "not cleaned out, not in photo-ready condition.</i>",
+        condition_style))
+    elems.append(Paragraph(
+        f"<b>${price_high:,} — Instagram-Worthy:</b>  <i>Top-notch condition, full inspection "
+        "reports on hand, smoke detectors up to date, exceptionally clean, no smell of animals.</i>",
+        condition_style))
     elems.append(Spacer(1, 18))
 
     # ── Prominent recommended price display ───────────────────────────────────
@@ -376,6 +365,9 @@ def _build_research_notes(subject, recommendations, s):
         for key in recommendations:
             if key in rec_map:
                 title, body = rec_map[key]
+                # Strip leading emoji (everything up to and including first space after emoji)
+                import re as _re
+                clean_title = _re.sub(r'^[\U00010000-\U0010ffff\u2000-\u3300\u00a9-\u00ae]\S*\s*', '', title).strip()
                 bullet_title_style = ParagraphStyle(
                     "rec_title", fontName="Times-Bold", fontSize=11,
                     textColor=PINK, leading=15, leftIndent=0,
@@ -387,7 +379,7 @@ def _build_research_notes(subject, recommendations, s):
                     alignment=TA_JUSTIFY, spaceAfter=2,
                 )
                 elems.append(KeepTogether([
-                    Paragraph(f"<font color='#E91E63'>\u2022</font> <b>{title}</b>", bullet_title_style),
+                    Paragraph(f"\u2022  <b>{clean_title}</b>", bullet_title_style),
                     Paragraph(body, body_style),
                     Spacer(1, 2),
                 ]))
@@ -508,12 +500,6 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
     story += _build_subject_overview(subject, s)
     story.append(_divider())
 
-    # Agent notes (before recommendations)
-    agent_notes_elems = _build_agent_notes(subject, s)
-    if agent_notes_elems:
-        story += agent_notes_elems
-        story.append(_divider())
-
     # Recommendations
     story += _build_research_notes(subject, recommendations, s)
     story.append(_divider())
@@ -524,8 +510,14 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
         story += anr_elems
         story.append(_divider())
 
-    # Price recommendation
+    # Price recommendation (starts on new page)
     story += _build_price_recommendation(subject, comps, price_low, price_high, price_rec, price_notes, s)
+
+    # Agent notes — after pricing
+    agent_notes_elems = _build_agent_notes(subject, s)
+    if agent_notes_elems:
+        story.append(_divider())
+        story += agent_notes_elems
 
     def _footer(canvas, doc):
         _make_page_template(canvas, doc, logo_path)
