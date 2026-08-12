@@ -18,7 +18,7 @@ from map_builder import build_comparison_map
 from pdf_builder import merge_cma_pdf
 
 # ── App Config ─────────────────────────────────────────────────────────────────
-APP_VERSION = "1.9.0"
+APP_VERSION = "2.4.3"
 NAVY = "#173348"
 PINK = "#E91E63"
 
@@ -757,6 +757,17 @@ with st.expander("📋 Version History", expanded=False):
     st.markdown(f"""
 | Version | Date | What Changed |
 |---------|------|-------------|
+| **v2.4.3** | Aug 11, 2026 | Larger HC logo in footer; footer text size increased; added Holly Hall & Fran Collins phone numbers to every page footer |
+| **v2.4.2** | Aug 11, 2026 | Agent Notes moved to after Price Recommendation; fixed bullet squares on recommendations; price scale condition notes now stacked (not side-by-side) |
+| **v2.4.1** | Aug 11, 2026 | Fixed Agent Notes extraction from sidebar not populating the text field |
+| **v2.4.0** | Aug 11, 2026 | Page break before Price Recommendation; pink divider under recommended price; removed highlight from firm philosophy note; HC logo added to every page footer |
+| **v2.3.3** | Aug 11, 2026 | Fixed recommendation bullet squares; updated septic, spring, and staging recommendation text |
+| **v2.3.2** | Aug 11, 2026 | Price scale redesigned: text moved outside Drawing, arrow points down from above bar, better spacing throughout |
+| **v2.3.1** | Aug 11, 2026 | Fixed year built showing as "1,990"; pink round bullets on recommendations |
+| **v2.3.0** | Aug 11, 2026 | Justified text throughout; wider price scale (full page width); price labels below color bar; prominent recommended price display; new septic inspection paragraph |
+| **v2.2.0** | Aug 9, 2026 | Removed auto-generated narrative from Research Notes; renamed to Agent Recommendations; Agent Notes moved above recommendations in PDF; paragraph breaks preserved |
+| **v2.1.0** | Aug 9, 2026 | Price recommendation slider with gradient color scale and arrow marker; firm philosophy note |
+| **v2.0.0** | Aug 9, 2026 | Added price recommendation section (As-Is low / Instagram-Worthy high); removed Days on Market and Living Area fields |
 | **v1.9.0** | Aug 9, 2026 | Removed sale price field from subject property; removed Comparable Properties side-by-side table from PDF |
 | **v1.8.0** | Aug 9, 2026 | Added fuel types (multi-select), private septic, private well, view, solar, and boundary notes fields to subject property |
 | **v1.7.0** | Aug 9, 2026 | Replaced ANR link generator with simple PDF upload; ANR map appended as-is to final PDF |
