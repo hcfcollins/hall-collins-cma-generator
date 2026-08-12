@@ -521,18 +521,13 @@ st.markdown('<div class="section-label">Step 4 — Agent Notes</div>', unsafe_al
 st.markdown("*Your personal notes — these will appear as a dedicated section in the final PDF.*")
 
 # Pre-fill from sidebar PDF extraction if available
-_notes_prefill = (
-    st.session_state.get("agent_notes_prefill")
-    or st.session_state.subject_data.get("agent_notes")
-    or ""
-)
-# Clear the prefill trigger after consuming it so it doesn't fight edits
-if "agent_notes_prefill" in st.session_state:
-    del st.session_state["agent_notes_prefill"]
+if st.session_state.get("agent_notes_prefill"):
+    st.session_state["agent_notes"] = st.session_state.pop("agent_notes_prefill")
+elif "agent_notes" not in st.session_state:
+    st.session_state["agent_notes"] = st.session_state.subject_data.get("agent_notes", "")
 
 agent_notes = st.text_area(
     "Agent Notes",
-    value=_notes_prefill,
     placeholder=(
         "e.g. The sellers are motivated and flexible on closing date. "
         "The basement has been freshly waterproofed. "
