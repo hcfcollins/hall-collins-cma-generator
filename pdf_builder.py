@@ -329,21 +329,21 @@ def _build_research_notes(subject, recommendations, s):
 
     rec_map = {
         "wait_spring": ("🌸 Wait for Spring",
-            "Given current market conditions and the seasonal nature of Vermont real estate, "
-            "we recommend waiting for spring to list. Inventory is lower and buyer activity "
-            "is significantly higher between April and June, which typically supports stronger "
-            "offers and shorter days on market."),
+            "We will support you whenever you choose to list, but in this case we would recommend "
+            "waiting until April/May depending on the weather. Historically homes sell for a little "
+            "more and more buyers are shopping to get in for the summer and prior to the new school "
+            "year. Any time April–October is a strong time."),
         "septic_inspection": ("🔍 Septic Inspection Recommended in Advance",
-            "We would recommend getting a septic inspection done prior to listing. This is one of the best "
-            "ways to set yourself up for a smooth, stress-free sale! Because a septic system is hidden "
-            "underground, it's naturally one of those big mystery areas that makes buyers extra cautious. "
-            "If they don't know what they are getting into, they will 99 times out of 100 inspect it. "
-            "Coming in to the transaction knowing what condition it is in can make you as the seller look "
-            "extremely thoughtful and prepared as well as relieve any anxiety. It's actually one of the "
-            "top reasons deals fall through or homes end up back on the market. By inspecting it early, "
-            "you take all the guesswork off the table so you can price with confidence and avoid "
-            "last-minute negotiation surprises. We can easily connect you with a few local inspectors "
-            "to help get you started!"),
+            "Because a septic system is hidden underground, it's naturally one of those big mystery "
+            "areas that makes buyers extra cautious. If they don't know what they are getting into, "
+            "they will inspect it the majority of the time and if there are any problems it can derail "
+            "the whole sale. Coming in to the transaction knowing what condition it is in can make you, "
+            "as the seller, look extremely thoughtful and prepared as well as relieve any anxiety the "
+            "buyer may have. It's actually one of the top reasons deals fall through or homes end up "
+            "back on the market. By inspecting it early, you take all the guesswork off the table so "
+            "you can price with confidence and avoid last-minute negotiation surprises. We can easily "
+            "connect you with a few local inspectors. This is one of the best ways to set yourself up "
+            "for a smooth, stress-free sale!"),
         "home_inspection": ("🏠 Home Inspection Recommended in Advance",
             "A pre-listing home inspection allows you to identify and address issues on your "
             "own timeline and budget — rather than during contract negotiations. This builds "
@@ -351,7 +351,9 @@ def _build_research_notes(subject, recommendations, s):
         "staging": ("🛋️ Staging Instructions",
             "First impressions are everything. Declutter all living spaces, depersonalize the "
             "home, ensure all rooms have adequate lighting, and add fresh flowers or plants to "
-            "key areas. Consider a professional stager consultation for the main living areas."),
+            "key areas. At a minimum all surfaces should be cleared, plastic hidden away, any "
+            "excess clutter gone. We almost want to make a space look boring so people can start "
+            "to envision where they would place their own items."),
         "deep_clean": ("🧹 Deep Clean & Clear Out Recommended",
             "We recommend a professional deep clean prior to listing photography and showings. "
             "Pay particular attention to kitchens, bathrooms, windows, and floors. Clearing "
@@ -373,17 +375,16 @@ def _build_research_notes(subject, recommendations, s):
                 title, body = rec_map[key]
                 bullet_title_style = ParagraphStyle(
                     "rec_title", fontName="Times-Bold", fontSize=11,
-                    textColor=PINK, leading=15, leftIndent=14, bulletIndent=0,
-                    bulletFontName="Times-Roman", bulletFontSize=13,
-                    bulletColor=PINK, spaceAfter=1, spaceBefore=6,
+                    textColor=PINK, leading=15, leftIndent=0,
+                    spaceAfter=1, spaceBefore=6,
                 )
                 body_style = ParagraphStyle(
                     "rec_body", fontName="Times-Roman", fontSize=10,
-                    textColor=DGRAY, leading=14, leftIndent=18,
+                    textColor=DGRAY, leading=14, leftIndent=12,
                     alignment=TA_JUSTIFY, spaceAfter=2,
                 )
                 elems.append(KeepTogether([
-                    Paragraph(f"<bullet>\u2022</bullet><b>{title}</b>", bullet_title_style),
+                    Paragraph(f"<font color='#E91E63'>\u2022</font> <b>{title}</b>", bullet_title_style),
                     Paragraph(body, body_style),
                     Spacer(1, 2),
                 ]))
