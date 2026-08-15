@@ -487,22 +487,12 @@ if _prop_type_now == "Multi Family":
     )
     _sd = st.session_state.subject_data
 
+    # ── Number of units + expenses ─────────────────────────────────────────
     mf_col1, mf_col2 = st.columns(2)
     with mf_col1:
         _sd["mf_units"] = st.number_input(
-            "Number of Units", min_value=2, max_value=100, step=1,
+            "Number of Units", min_value=2, max_value=20, step=1,
             value=int(_sd.get("mf_units", 2)), key="mf_units"
-        )
-        _sd["mf_rent_per_unit"] = st.number_input(
-            "Current Monthly Rent per Unit ($)", min_value=0, step=50,
-            value=int(_sd.get("mf_rent_per_unit", 1000)), key="mf_rent_per_unit",
-            help="What tenants are paying right now."
-        )
-        _sd["mf_market_rent_per_unit"] = st.number_input(
-            "Market Rent per Unit ($)", min_value=0, step=50,
-            value=int(_sd.get("mf_market_rent_per_unit", _sd.get("mf_rent_per_unit", 1000))),
-            key="mf_market_rent_per_unit",
-            help="What the market is currently supporting — shows the upside cap rate potential."
         )
         _sd["mf_vacancy_pct"] = st.number_input(
             "Vacancy Rate (%)", min_value=0.0, max_value=100.0, step=0.5,
@@ -521,6 +511,50 @@ if _prop_type_now == "Multi Family":
             "Annual Maintenance & Other Expenses ($)", min_value=0, step=100,
             value=int(_sd.get("mf_maintenance", 2000)), key="mf_maintenance"
         )
+
+    # ── Per-unit rent breakdown ────────────────────────────────────────────
+    st.markdown("**Rent by Unit** — enter current and market rent for each unit")
+    _num_units = int(_sd.get("mf_units", 2))
+
+    # Ensure unit list is the right length
+    _existing_units = _sd.get("mf_unit_rents", [])
+    while len(_existing_units) < _num_units:
+        _existing_units.append({"label": f"Unit {len(_existing_units) + 1}", "current": 0, "market": 0})
+    _existing_units = _existing_units[:_num_units]
+    _sd["mf_unit_rents"] = _existing_units
+
+    # Header row
+    _hcols = st.columns([1.5, 2, 2, 2])
+    _hcols[0].markdown("**Unit**")
+    _hcols[1].markdown("**Description** *(optional)*")
+    _hcols[2].markdown("**Current Rent/mo ($)**")
+    _hcols[3].markdown("**Market Rent/mo ($)**")
+
+    for _i in range(_num_units):
+        _ucols = st.columns([1.5, 2, 2, 2])
+        with _ucols[0]:
+            st.markdown(f"<div style='padding-top:8px;font-weight:600;color:#173348;'>Unit {_i+1}</div>", unsafe_allow_html=True)
+        with _ucols[1]:
+            _existing_units[_i]["label"] = st.text_input(
+                f"desc_{_i}", label_visibility="collapsed",
+                placeholder=f"e.g. 2BR/1BA upstairs",
+                value=_existing_units[_i].get("label", f"Unit {_i+1}"),
+                key=f"mf_unit_label_{_i}"
+            )
+        with _ucols[2]:
+            _existing_units[_i]["current"] = st.number_input(
+                f"cur_{_i}", label_visibility="collapsed",
+                min_value=0, step=50,
+                value=int(_existing_units[_i].get("current", 0)),
+                key=f"mf_unit_cur_{_i}"
+            )
+        with _ucols[3]:
+            _existing_units[_i]["market"] = st.number_input(
+                f"mkt_{_i}", label_visibility="collapsed",
+                min_value=0, step=50,
+                value=int(_existing_units[_i].get("market", 0)),
+                key=f"mf_unit_mkt_{_i}"
+            )
 
     st.markdown("**Financing Scenario** *(optional — for cash-flow-after-financing analysis)*")
     fin_col1, fin_col2, fin_col3 = st.columns(3)
@@ -543,8 +577,7 @@ if _prop_type_now == "Multi Family":
 
     # ── Calculations ───────────────────────────────────────────────────────
     _units        = int(_sd.get("mf_units", 2))
-    _rent_pu      = int(_sd.get("mf_rent_per_unit", 1000))
-    _mkt_rent_pu  = int(_sd.get("mf_market_rent_per_unit", _rent_pu))
+    _unit_rents   = _sd.get("mf_unit_rents", [])
     _vacancy      = float(_sd.get("mf_vacancy_pct", 5.0))
     _taxes        = int(_sd.get("mf_taxes", 4000))
     _insurance    = int(_sd.get("mf_insurance", 1500))
@@ -552,17 +585,21 @@ if _prop_type_now == "Multi Family":
     _expenses     = _taxes + _insurance + _maintenance
     _price_for_cap = st.session_state.get("price_rec", st.session_state.get("price_high", 450000))
 
-    # Current rent scenario
-    _gross_cur    = _units * _rent_pu * 12
+    # Sum across all units
+    _gross_cur    = sum(u.get("current", 0) for u in _unit_rents) * 12
+    _gross_mkt    = sum(u.get("market", 0) for u in _unit_rents) * 12
+    # Derived totals for summary (average per unit for backwards compat)
+    _rent_pu      = int(_gross_cur / 12 / _units) if _units > 0 else 0
+    _mkt_rent_pu  = int(_gross_mkt / 12 / _units) if _units > 0 else 0
+
     _eff_cur      = _gross_cur * (1 - _vacancy / 100)
     _noi_cur      = _eff_cur - _expenses
     _cap_cur      = (_noi_cur / _price_for_cap * 100) if _price_for_cap > 0 else 0.0
 
-    # Market rent scenario
-    _gross_mkt    = _units * _mkt_rent_pu * 12
     _eff_mkt      = _gross_mkt * (1 - _vacancy / 100)
     _noi_mkt      = _eff_mkt - _expenses
     _cap_mkt      = (_noi_mkt / _price_for_cap * 100) if _price_for_cap > 0 else 0.0
+    _has_upside   = _gross_mkt != _gross_cur
 
     # Financing calculations
     _down_pct     = float(_sd.get("mf_down_pct", 25.0))
@@ -594,6 +631,8 @@ if _prop_type_now == "Multi Family":
     _sd["mf_eff_gross_mkt"]      = _eff_mkt
     _sd["mf_noi_mkt"]            = _noi_mkt
     _sd["mf_cap_rate_mkt"]       = round(_cap_mkt, 2)
+    _sd["mf_rent_per_unit"]      = _rent_pu      # avg, kept for PDF fallback
+    _sd["mf_market_rent_per_unit"] = _mkt_rent_pu  # avg, kept for PDF fallback
     _sd["mf_show_financing"]     = _show_financing
     _sd["mf_down_amt"]           = round(_down_amt)
     _sd["mf_loan_amt"]           = round(_loan_amt)
@@ -609,7 +648,7 @@ if _prop_type_now == "Multi Family":
     _upside_row = (
         f'<tr style="border-top:1px solid #ccc;">'
         f'<td style="color:#999;font-size:0.85rem;padding-top:4px;" colspan="3">'
-        f'<em>Market rent is ${_mkt_rent_pu:,}/unit — ${_mkt_rent_pu - _rent_pu:+,}/unit vs. current</em>'
+        f'<em>Market rents total ${_gross_mkt/12:,.0f}/mo — ${(_gross_mkt - _gross_cur)/12:+,.0f}/mo vs. current</em>'
         f'</td></tr>'
     ) if _has_upside else ""
 

@@ -499,7 +499,8 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     elems += _section_header("Multi-Family Income & Cap Rate Analysis", s)
 
     units        = subject.get("mf_units", 0)
-    rent_pu      = subject.get("mf_rent_per_unit", 0)
+    unit_rents   = subject.get("mf_unit_rents", [])   # list of {label, current, market}
+    rent_pu      = subject.get("mf_rent_per_unit", 0)      # avg fallback
     mkt_rent_pu  = subject.get("mf_market_rent_per_unit", rent_pu)
     vacancy      = subject.get("mf_vacancy_pct", 5.0)
     taxes        = subject.get("mf_taxes", 0)
@@ -507,18 +508,16 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     maintenance  = subject.get("mf_maintenance", 0)
     expenses     = subject.get("mf_total_expenses", taxes + insurance + maintenance)
 
-    # Current rent scenario
-    gross_cur   = subject.get("mf_gross_income", units * rent_pu * 12)
+    gross_cur   = subject.get("mf_gross_income", 0)
     eff_cur     = subject.get("mf_eff_gross", gross_cur * (1 - vacancy / 100))
     noi_cur     = subject.get("mf_noi", eff_cur - expenses)
     cap_cur     = subject.get("mf_cap_rate", (noi_cur / price_rec * 100) if price_rec else 0)
 
-    # Market rent scenario
-    has_market   = mkt_rent_pu and mkt_rent_pu != rent_pu
-    gross_mkt    = subject.get("mf_gross_income_mkt", units * mkt_rent_pu * 12)
-    eff_mkt      = subject.get("mf_eff_gross_mkt", gross_mkt * (1 - vacancy / 100))
-    noi_mkt      = subject.get("mf_noi_mkt", eff_mkt - expenses)
-    cap_mkt      = subject.get("mf_cap_rate_mkt", (noi_mkt / price_rec * 100) if price_rec else 0)
+    gross_mkt   = subject.get("mf_gross_income_mkt", 0)
+    eff_mkt     = subject.get("mf_eff_gross_mkt", gross_mkt * (1 - vacancy / 100))
+    noi_mkt     = subject.get("mf_noi_mkt", eff_mkt - expenses)
+    cap_mkt     = subject.get("mf_cap_rate_mkt", (noi_mkt / price_rec * 100) if price_rec else 0)
+    has_market  = gross_mkt != gross_cur and gross_mkt > 0
 
     def _money(v):
         try:
@@ -531,13 +530,95 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         return Paragraph(text, ParagraphStyle("_rp", fontName=fn, fontSize=size,
                                               textColor=color, alignment=align))
 
-    # ── Income comparison table ────────────────────────────────────────────────
+    # ── Per-unit rent table ───────────────────────────────────────────────────
+    if unit_rents:
+        elems.append(Paragraph("Rent by Unit", ParagraphStyle(
+            "unit_hdr", fontName="Times-Bold", fontSize=10, textColor=NAVY,
+            spaceAfter=4, spaceBefore=4)))
+
+        if has_market:
+            u_col_w = [0.5*inch, 2.4*inch, 1.5*inch, 1.5*inch, 0.7*inch]
+            u_header = [
+                Paragraph("<b>#</b>", s["label"]),
+                Paragraph("<b>Unit Description</b>", s["label"]),
+                _rp("<b>Current Rent/mo</b>", bold=True, color=WHITE, align=TA_CENTER),
+                _rp("<b>Market Rent/mo</b>", bold=True, color=WHITE, align=TA_CENTER),
+                _rp("<b>Δ/mo</b>", bold=True, color=WHITE, align=TA_CENTER),
+            ]
+        else:
+            u_col_w = [0.5*inch, 3.0*inch, 2.5*inch]
+            u_header = [
+                Paragraph("<b>#</b>", s["label"]),
+                Paragraph("<b>Unit Description</b>", s["label"]),
+                _rp("<b>Current Rent/mo</b>", bold=True, color=WHITE, align=TA_CENTER),
+            ]
+
+        u_rows = [u_header]
+        for i, u in enumerate(unit_rents):
+            cur = u.get("current", 0)
+            mkt = u.get("market", 0)
+            diff = mkt - cur
+            diff_color = PINK if diff > 0 else (colors.HexColor("#2e7d32") if diff == 0 else colors.HexColor("#c62828"))
+            lbl = u.get("label", f"Unit {i+1}")
+            if has_market:
+                u_rows.append([
+                    _rp(str(i+1), align=TA_CENTER, color=NAVY),
+                    Paragraph(lbl, s["body"]),
+                    _rp(_money(cur), align=TA_CENTER, color=DGRAY),
+                    _rp(_money(mkt), align=TA_CENTER, color=PINK if diff > 0 else DGRAY),
+                    _rp(f"{diff:+,.0f}", align=TA_CENTER, bold=True, color=diff_color),
+                ])
+            else:
+                u_rows.append([
+                    _rp(str(i+1), align=TA_CENTER, color=NAVY),
+                    Paragraph(lbl, s["body"]),
+                    _rp(_money(cur), align=TA_CENTER, color=DGRAY),
+                ])
+
+        # Totals row
+        total_cur = sum(u.get("current", 0) for u in unit_rents)
+        total_mkt = sum(u.get("market", 0) for u in unit_rents)
+        total_diff = total_mkt - total_cur
+        if has_market:
+            u_rows.append([
+                Paragraph("", s["body"]),
+                _rp("<b>Total Monthly</b>", bold=True, color=NAVY, align=TA_RIGHT),
+                _rp(f"<b>{_money(total_cur)}</b>", bold=True, color=NAVY, align=TA_CENTER),
+                _rp(f"<b>{_money(total_mkt)}</b>", bold=True, color=PINK, align=TA_CENTER),
+                _rp(f"<b>{total_diff:+,.0f}</b>", bold=True,
+                    color=PINK if total_diff > 0 else DGRAY, align=TA_CENTER),
+            ])
+        else:
+            u_rows.append([
+                Paragraph("", s["body"]),
+                _rp("<b>Total Monthly</b>", bold=True, color=NAVY, align=TA_RIGHT),
+                _rp(f"<b>{_money(total_cur)}</b>", bold=True, color=NAVY, align=TA_CENTER),
+            ])
+
+        u_tbl = Table(u_rows, colWidths=u_col_w)
+        u_style = [
+            ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -2), [WHITE, LGRAY]),
+            ("BACKGROUND",    (0, -1), (-1, -1), BLUSH),
+            ("LINEABOVE",     (0, -1), (-1, -1), 1, PINK),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+        ]
+        if has_market:
+            u_style += [("BACKGROUND", (3, 1), (3, -2), colors.HexColor("#FFF0F5"))]
+        u_tbl.setStyle(TableStyle(u_style))
+        elems.append(u_tbl)
+        elems.append(Spacer(1, 10))
+
+    # ── Income/expense summary table ──────────────────────────────────────────
     if has_market:
         col_w = [2.9 * inch, 1.7 * inch, 1.7 * inch]
         header = [
-            Paragraph("<b>Income &amp; Expense Item</b>", s["label"]),
+            Paragraph("<b>Income &amp; Expense Summary</b>", s["label"]),
             _rp("<b>Current Rents</b>", bold=True, color=WHITE),
-            _rp(f"<b>Market Rents</b>", bold=True, color=WHITE),
+            _rp("<b>Market Rents</b>", bold=True, color=WHITE),
         ]
         def _row(label, cur_val, mkt_val, bold=False):
             return [
@@ -550,7 +631,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     else:
         col_w = [3.5 * inch, 2.5 * inch]
         header = [
-            Paragraph("<b>Income &amp; Expense Item</b>", s["label"]),
+            Paragraph("<b>Income &amp; Expense Summary</b>", s["label"]),
             _rp("<b>Annual Amount</b>", bold=True, color=WHITE),
         ]
         def _row(label, cur_val, mkt_val=None, bold=False):
@@ -560,14 +641,8 @@ def _build_cap_rate_analysis(subject, price_rec, s):
                     color=NAVY if bold else DGRAY),
             ]
 
-    rent_label = f"Monthly Rent/Unit — Current ({_money(rent_pu)})"
-    mkt_label  = f"Monthly Rent/Unit — Market ({_money(mkt_rent_pu)})"
-
     table_data = [
         header,
-        _row("Number of Units", str(units), str(units)),
-        _row(f"Monthly Rent per Unit",
-             _money(rent_pu), _money(mkt_rent_pu)),
         _row("Gross Annual Rent",
              _money(gross_cur), _money(gross_mkt)),
         _row(f"Less Vacancy ({vacancy:.1f}%)",
@@ -642,7 +717,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         elems.append(KeepTogether([cap_tbl]))
         elems.append(Spacer(1, 6))
         elems.append(Paragraph(
-            f"<i>At market rents of {_money(mkt_rent_pu)}/unit/month, the projected cap rate "
+            f"<i>At market rents totaling {_money(gross_mkt / 12)}/month, the projected cap rate "
             f"would be <b>{cap_mkt:.2f}%</b> — an increase of {diff_str} over the current "
             f"cap rate of <b>{cap_cur:.2f}%</b>.</i>",
             s["body"]
