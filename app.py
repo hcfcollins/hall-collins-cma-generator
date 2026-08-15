@@ -147,6 +147,7 @@ def _session_to_dict():
             "rec_subdivision": st.session_state.get("rec_subdivision", False),
             "rec_painting":    st.session_state.get("rec_painting", False),
         },
+        # multi-family income fields are stored inside subject_data["mf_*"]
     }
 
 
@@ -385,7 +386,19 @@ if search_subj and subj_street and subj_city:
     else:
         st.info("ℹ️ Address located but no public listing data found. Please fill in the details below manually — this is normal for off-market or rural properties.")
 
-# Subject property detail form
+# Subject property detail form — always show the type selector; full details once address entered
+_prop_type_opts = ["Single Family", "Multi Family", "Condo", "Land", "Commercial", "Other"]
+_pt_saved = st.session_state.subject_data.get("property_type", "Single Family")
+_pt_idx   = _prop_type_opts.index(_pt_saved) if _pt_saved in _prop_type_opts else 0
+_quick_type = st.selectbox(
+    "Property Type",
+    _prop_type_opts,
+    index=_pt_idx,
+    key="s_type",
+    help="Select Multi Family to unlock income & cap rate analysis below.",
+)
+st.session_state.subject_data["property_type"] = _quick_type
+
 if subj_street or st.session_state.subject_searched:
     sd = st.session_state.subject_data
     with st.expander("📋 Subject Property Details (review & edit)", expanded=st.session_state.subject_searched):
@@ -403,9 +416,9 @@ if subj_street or st.session_state.subject_searched:
             sd["year_built"] = st.number_input("Year Built", min_value=1700, max_value=2030,
                                                 value=int(sd["year_built"]) if sd.get("year_built") else 1990, key="s_year")
         with dc3:
-            sd["property_type"] = st.selectbox("Property Type",
-                ["Single Family", "Multi Family", "Condo", "Land", "Commercial", "Other"],
-                index=0, key="s_type")
+            # Property type is set above (always visible) — show read-only label here
+            st.markdown(f"**Property Type**")
+            st.markdown(f"*{st.session_state.subject_data.get('property_type', 'Single Family')}*  *(change above)*")
         sd["features_notes"] = st.text_area("Notable Features / Highlights",
             placeholder="e.g. Original hardwood floors, updated kitchen, mountain views, wrap-around porch...",
             value=sd.get("features_notes", ""), key="s_features")
@@ -458,6 +471,213 @@ if subj_street or st.session_state.subject_searched:
         )
 
 st.markdown("---")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 1b — MULTI-FAMILY INCOME INPUTS (conditional)
+# ══════════════════════════════════════════════════════════════════════════════
+# s_type widget always renders above, so this is always current
+_prop_type_now = st.session_state.get("s_type", "Single Family")
+st.session_state.subject_data["property_type"] = _prop_type_now
+
+if _prop_type_now == "Multi Family":
+    st.markdown('<div class="section-label">Step 1b — Multi-Family Income Analysis</div>', unsafe_allow_html=True)
+    st.markdown(
+        "Fill in the income and expense details below. "
+        "Cap rate will be calculated automatically and included in the CMA."
+    )
+    _sd = st.session_state.subject_data
+
+    mf_col1, mf_col2 = st.columns(2)
+    with mf_col1:
+        _sd["mf_units"] = st.number_input(
+            "Number of Units", min_value=2, max_value=100, step=1,
+            value=int(_sd.get("mf_units", 2)), key="mf_units"
+        )
+        _sd["mf_rent_per_unit"] = st.number_input(
+            "Current Monthly Rent per Unit ($)", min_value=0, step=50,
+            value=int(_sd.get("mf_rent_per_unit", 1000)), key="mf_rent_per_unit",
+            help="What tenants are paying right now."
+        )
+        _sd["mf_market_rent_per_unit"] = st.number_input(
+            "Market Rent per Unit ($)", min_value=0, step=50,
+            value=int(_sd.get("mf_market_rent_per_unit", _sd.get("mf_rent_per_unit", 1000))),
+            key="mf_market_rent_per_unit",
+            help="What the market is currently supporting — shows the upside cap rate potential."
+        )
+        _sd["mf_vacancy_pct"] = st.number_input(
+            "Vacancy Rate (%)", min_value=0.0, max_value=100.0, step=0.5,
+            value=float(_sd.get("mf_vacancy_pct", 5.0)), key="mf_vacancy_pct"
+        )
+    with mf_col2:
+        _sd["mf_taxes"] = st.number_input(
+            "Annual Property Taxes ($)", min_value=0, step=100,
+            value=int(_sd.get("mf_taxes", 4000)), key="mf_taxes"
+        )
+        _sd["mf_insurance"] = st.number_input(
+            "Annual Insurance ($)", min_value=0, step=100,
+            value=int(_sd.get("mf_insurance", 1500)), key="mf_insurance"
+        )
+        _sd["mf_maintenance"] = st.number_input(
+            "Annual Maintenance & Other Expenses ($)", min_value=0, step=100,
+            value=int(_sd.get("mf_maintenance", 2000)), key="mf_maintenance"
+        )
+
+    st.markdown("**Financing Scenario** *(optional — for cash-flow-after-financing analysis)*")
+    fin_col1, fin_col2, fin_col3 = st.columns(3)
+    with fin_col1:
+        _sd["mf_down_pct"] = st.number_input(
+            "Down Payment (%)", min_value=0.0, max_value=100.0, step=1.0,
+            value=float(_sd.get("mf_down_pct", 25.0)), key="mf_down_pct",
+            help="Typical commercial multi-family financing requires 20–30% down."
+        )
+    with fin_col2:
+        _sd["mf_interest_rate"] = st.number_input(
+            "Interest Rate (%)", min_value=0.0, max_value=25.0, step=0.125,
+            value=float(_sd.get("mf_interest_rate", 7.0)), key="mf_interest_rate"
+        )
+    with fin_col3:
+        _sd["mf_loan_term_yrs"] = st.number_input(
+            "Loan Term (years)", min_value=5, max_value=30, step=5,
+            value=int(_sd.get("mf_loan_term_yrs", 30)), key="mf_loan_term_yrs"
+        )
+
+    # ── Calculations ───────────────────────────────────────────────────────
+    _units        = int(_sd.get("mf_units", 2))
+    _rent_pu      = int(_sd.get("mf_rent_per_unit", 1000))
+    _mkt_rent_pu  = int(_sd.get("mf_market_rent_per_unit", _rent_pu))
+    _vacancy      = float(_sd.get("mf_vacancy_pct", 5.0))
+    _taxes        = int(_sd.get("mf_taxes", 4000))
+    _insurance    = int(_sd.get("mf_insurance", 1500))
+    _maintenance  = int(_sd.get("mf_maintenance", 2000))
+    _expenses     = _taxes + _insurance + _maintenance
+    _price_for_cap = st.session_state.get("price_rec", st.session_state.get("price_high", 450000))
+
+    # Current rent scenario
+    _gross_cur    = _units * _rent_pu * 12
+    _eff_cur      = _gross_cur * (1 - _vacancy / 100)
+    _noi_cur      = _eff_cur - _expenses
+    _cap_cur      = (_noi_cur / _price_for_cap * 100) if _price_for_cap > 0 else 0.0
+
+    # Market rent scenario
+    _gross_mkt    = _units * _mkt_rent_pu * 12
+    _eff_mkt      = _gross_mkt * (1 - _vacancy / 100)
+    _noi_mkt      = _eff_mkt - _expenses
+    _cap_mkt      = (_noi_mkt / _price_for_cap * 100) if _price_for_cap > 0 else 0.0
+
+    # Financing calculations
+    _down_pct     = float(_sd.get("mf_down_pct", 25.0))
+    _rate_annual  = float(_sd.get("mf_interest_rate", 7.0))
+    _term_yrs     = int(_sd.get("mf_loan_term_yrs", 30))
+    _show_financing = _down_pct > 0 and _rate_annual > 0
+    _down_amt     = _price_for_cap * (_down_pct / 100)
+    _loan_amt     = _price_for_cap - _down_amt
+    # Standard amortization: M = P * [r(1+r)^n] / [(1+r)^n - 1]
+    _r_monthly    = (_rate_annual / 100) / 12
+    _n_payments   = _term_yrs * 12
+    if _r_monthly > 0 and _loan_amt > 0:
+        _monthly_pmt  = _loan_amt * (_r_monthly * (1 + _r_monthly) ** _n_payments) / ((1 + _r_monthly) ** _n_payments - 1)
+    else:
+        _monthly_pmt  = (_loan_amt / _n_payments) if _n_payments > 0 else 0
+    _annual_debt  = _monthly_pmt * 12
+    _cf_cur       = _noi_cur - _annual_debt      # cash flow after financing, current rents
+    _cf_mkt       = _noi_mkt - _annual_debt      # cash flow after financing, market rents
+    _coc_cur      = (_cf_cur / _down_amt * 100) if _down_amt > 0 else 0.0   # cash-on-cash return
+    _coc_mkt      = (_cf_mkt / _down_amt * 100) if _down_amt > 0 else 0.0
+
+    # Store for PDF
+    _sd["mf_gross_income"]       = _gross_cur
+    _sd["mf_eff_gross"]          = _eff_cur
+    _sd["mf_total_expenses"]     = _expenses
+    _sd["mf_noi"]                = _noi_cur
+    _sd["mf_cap_rate"]           = round(_cap_cur, 2)
+    _sd["mf_gross_income_mkt"]   = _gross_mkt
+    _sd["mf_eff_gross_mkt"]      = _eff_mkt
+    _sd["mf_noi_mkt"]            = _noi_mkt
+    _sd["mf_cap_rate_mkt"]       = round(_cap_mkt, 2)
+    _sd["mf_show_financing"]     = _show_financing
+    _sd["mf_down_amt"]           = round(_down_amt)
+    _sd["mf_loan_amt"]           = round(_loan_amt)
+    _sd["mf_monthly_payment"]    = round(_monthly_pmt, 2)
+    _sd["mf_annual_debt_service"]= round(_annual_debt, 2)
+    _sd["mf_cf_cur"]             = round(_cf_cur, 2)
+    _sd["mf_cf_mkt"]             = round(_cf_mkt, 2)
+    _sd["mf_coc_cur"]            = round(_coc_cur, 2)
+    _sd["mf_coc_mkt"]            = round(_coc_mkt, 2)
+
+    # ── Live preview ───────────────────────────────────────────────────────
+    _has_upside = _mkt_rent_pu != _rent_pu
+    _upside_row = (
+        f'<tr style="border-top:1px solid #ccc;">'
+        f'<td style="color:#999;font-size:0.85rem;padding-top:4px;" colspan="3">'
+        f'<em>Market rent is ${_mkt_rent_pu:,}/unit — ${_mkt_rent_pu - _rent_pu:+,}/unit vs. current</em>'
+        f'</td></tr>'
+    ) if _has_upside else ""
+
+    def _cf_color(val):
+        return "#2e7d32" if val >= 0 else "#c62828"
+
+    _fin_rows = ""
+    if _show_financing:
+        _fin_rows = f"""
+        <tr><td colspan="{"3" if _has_upside else "2"}" style="padding:6px 8px 2px;font-family:Georgia;font-weight:700;color:#173348;border-top:2px solid #173348;font-size:0.9rem;">
+            🏦 Financing: {_down_pct:.0f}% down @ {_rate_annual:.3f}% for {_term_yrs} yrs</td></tr>
+        <tr style="background:#f5f5f5;"><td style="padding:3px 8px;">Loan Amount</td>
+            <td style="text-align:right;padding:3px 8px;">${_loan_amt:,.0f}</td>
+            {"<td style='text-align:right;padding:3px 8px;'>${:,.0f}</td>".format(_loan_amt) if _has_upside else ""}</tr>
+        <tr><td style="padding:3px 8px;">Annual Debt Service</td>
+            <td style="text-align:right;padding:3px 8px;">(${_annual_debt:,.0f})</td>
+            {"<td style='text-align:right;padding:3px 8px;'>(${:,.0f})</td>".format(_annual_debt) if _has_upside else ""}</tr>
+        <tr style="border-top:1px solid #E91E63;background:#fff0f5;">
+            <td style="padding:5px 8px;font-weight:700;">Cash Flow After Financing</td>
+            <td style="text-align:right;padding:5px 8px;font-weight:700;color:{_cf_color(_cf_cur)};">${_cf_cur:,.0f}</td>
+            {"<td style='text-align:right;padding:5px 8px;font-weight:700;color:{};'>${:,.0f}</td>".format(_cf_color(_cf_mkt), _cf_mkt) if _has_upside else ""}</tr>
+        <tr style="background:#f5f5f5;">
+            <td style="padding:3px 8px;color:#555;font-size:0.88rem;">Cash-on-Cash Return <span style="color:#999;">(on ${_down_amt:,.0f} down)</span></td>
+            <td style="text-align:right;padding:3px 8px;font-weight:700;color:{_cf_color(_coc_cur)};font-size:0.88rem;">{_coc_cur:.2f}%</td>
+            {"<td style='text-align:right;padding:3px 8px;font-weight:700;font-size:0.88rem;color:{};'>{:.2f}%</td>".format(_cf_color(_coc_mkt), _coc_mkt) if _has_upside else ""}</tr>
+        <tr><td colspan="{"3" if _has_upside else "2"}" style="padding:4px 8px;font-size:0.78rem;color:#999;font-style:italic;">
+            ⚠️ Most commercial lenders require 2 years of documented operating history to finance a multi-family property. Cap rate analysis above remains the primary investor metric.
+            </td></tr>
+        """
+
+    st.markdown(
+        f"""
+        <div style="background:#FFF8FB;border:1px solid #E91E63;border-radius:8px;padding:14px 20px;margin-top:8px;">
+        <div style="font-family:Georgia;color:#173348;font-size:1rem;font-weight:700;margin-bottom:10px;">📊 Live Analysis Preview</div>
+        <table style="width:100%;font-family:Georgia;font-size:0.9rem;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:4px 8px;color:#173348;border-bottom:2px solid #173348;"></th>
+              <th style="text-align:right;padding:4px 8px;color:#173348;border-bottom:2px solid #173348;">Current Rents</th>
+              {"<th style='text-align:right;padding:4px 8px;color:#E91E63;border-bottom:2px solid #173348;'>Market Rents</th>" if _has_upside else ""}
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="padding:3px 8px;">Gross Annual Rent</td>
+                <td style="text-align:right;padding:3px 8px;">${_gross_cur:,.0f}</td>
+                {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>${:,.0f}</td>".format(_gross_mkt) if _has_upside else ""}</tr>
+            <tr style="background:#f9f0f4;"><td style="padding:3px 8px;">Effective Gross Income <span style="color:#999;font-size:0.82rem;">({_vacancy}% vac.)</span></td>
+                <td style="text-align:right;padding:3px 8px;">${_eff_cur:,.0f}</td>
+                {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>${:,.0f}</td>".format(_eff_mkt) if _has_upside else ""}</tr>
+            <tr><td style="padding:3px 8px;">Operating Expenses</td>
+                <td style="text-align:right;padding:3px 8px;">(${_expenses:,.0f})</td>
+                {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>(${:,.0f})</td>".format(_expenses) if _has_upside else ""}</tr>
+            <tr style="border-top:1px solid #E91E63;background:#fff0f5;"><td style="padding:5px 8px;font-weight:700;">NOI</td>
+                <td style="text-align:right;padding:5px 8px;font-weight:700;">${_noi_cur:,.0f}</td>
+                {"<td style='text-align:right;padding:5px 8px;font-weight:700;color:#E91E63;'>${:,.0f}</td>".format(_noi_mkt) if _has_upside else ""}</tr>
+            <tr style="border-top:2px solid #173348;"><td style="padding:6px 8px;color:#E91E63;font-weight:700;font-size:1.05rem;">Cap Rate</td>
+                <td style="text-align:right;padding:6px 8px;color:#E91E63;font-weight:700;font-size:1.05rem;">{_cap_cur:.2f}%</td>
+                {"<td style='text-align:right;padding:6px 8px;color:#E91E63;font-weight:700;font-size:1.05rem;'>{:.2f}%</td>".format(_cap_mkt) if _has_upside else ""}</tr>
+            {_upside_row}
+            {_fin_rows}
+          </tbody>
+        </table>
+        <div style="font-size:0.8rem;color:#999;margin-top:8px;font-style:italic;">Values update when you change the recommended price in Step 2.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 2 — PRICING
@@ -674,6 +894,35 @@ if generate:
 
     # Attach agent notes to subject dict so doc_builder can include them
     sd["agent_notes"] = agent_notes
+
+    # Recalculate cap rates using final price_rec (in case it changed after Step 1b preview)
+    if sd.get("property_type") == "Multi Family" and sd.get("mf_noi") and int(price_rec) > 0:
+        _pr = int(price_rec)
+        sd["mf_cap_rate"]     = round(sd["mf_noi"] / _pr * 100, 2)
+        if sd.get("mf_noi_mkt"):
+            sd["mf_cap_rate_mkt"] = round(sd["mf_noi_mkt"] / _pr * 100, 2)
+        # Recompute financing against final price
+        if sd.get("mf_show_financing"):
+            _dp   = float(sd.get("mf_down_pct", 25.0))
+            _rate = float(sd.get("mf_interest_rate", 7.0))
+            _term = int(sd.get("mf_loan_term_yrs", 30))
+            _down = _pr * (_dp / 100)
+            _loan = _pr - _down
+            _rm   = (_rate / 100) / 12
+            _np   = _term * 12
+            if _rm > 0 and _loan > 0:
+                _pmt = _loan * (_rm * (1 + _rm) ** _np) / ((1 + _rm) ** _np - 1)
+            else:
+                _pmt = (_loan / _np) if _np > 0 else 0
+            _ads  = _pmt * 12
+            sd["mf_down_amt"]            = round(_down)
+            sd["mf_loan_amt"]            = round(_loan)
+            sd["mf_monthly_payment"]     = round(_pmt, 2)
+            sd["mf_annual_debt_service"] = round(_ads, 2)
+            sd["mf_cf_cur"]              = round(sd["mf_noi"] - _ads, 2)
+            sd["mf_cf_mkt"]              = round(sd.get("mf_noi_mkt", sd["mf_noi"]) - _ads, 2)
+            sd["mf_coc_cur"]             = round((sd["mf_cf_cur"] / _down * 100) if _down > 0 else 0, 2)
+            sd["mf_coc_mkt"]             = round((sd["mf_cf_mkt"] / _down * 100) if _down > 0 else 0, 2)
 
     with st.spinner("Building your CMA PDF…"):
         # Geocode subject if needed

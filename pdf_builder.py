@@ -493,6 +493,319 @@ def _make_page_template(canvas, doc, logo_path):
 
 # ── Master Build ──────────────────────────────────────────────────────────────
 
+def _build_cap_rate_analysis(subject, price_rec, s):
+    """Build a cap rate analysis section for multi-family properties."""
+    elems = []
+    elems += _section_header("Multi-Family Income & Cap Rate Analysis", s)
+
+    units        = subject.get("mf_units", 0)
+    rent_pu      = subject.get("mf_rent_per_unit", 0)
+    mkt_rent_pu  = subject.get("mf_market_rent_per_unit", rent_pu)
+    vacancy      = subject.get("mf_vacancy_pct", 5.0)
+    taxes        = subject.get("mf_taxes", 0)
+    insurance    = subject.get("mf_insurance", 0)
+    maintenance  = subject.get("mf_maintenance", 0)
+    expenses     = subject.get("mf_total_expenses", taxes + insurance + maintenance)
+
+    # Current rent scenario
+    gross_cur   = subject.get("mf_gross_income", units * rent_pu * 12)
+    eff_cur     = subject.get("mf_eff_gross", gross_cur * (1 - vacancy / 100))
+    noi_cur     = subject.get("mf_noi", eff_cur - expenses)
+    cap_cur     = subject.get("mf_cap_rate", (noi_cur / price_rec * 100) if price_rec else 0)
+
+    # Market rent scenario
+    has_market   = mkt_rent_pu and mkt_rent_pu != rent_pu
+    gross_mkt    = subject.get("mf_gross_income_mkt", units * mkt_rent_pu * 12)
+    eff_mkt      = subject.get("mf_eff_gross_mkt", gross_mkt * (1 - vacancy / 100))
+    noi_mkt      = subject.get("mf_noi_mkt", eff_mkt - expenses)
+    cap_mkt      = subject.get("mf_cap_rate_mkt", (noi_mkt / price_rec * 100) if price_rec else 0)
+
+    def _money(v):
+        try:
+            return f"${v:,.0f}"
+        except Exception:
+            return str(v)
+
+    def _rp(text, align=TA_RIGHT, bold=False, color=DGRAY, size=10):
+        fn = "Times-Bold" if bold else "Times-Roman"
+        return Paragraph(text, ParagraphStyle("_rp", fontName=fn, fontSize=size,
+                                              textColor=color, alignment=align))
+
+    # ── Income comparison table ────────────────────────────────────────────────
+    if has_market:
+        col_w = [2.9 * inch, 1.7 * inch, 1.7 * inch]
+        header = [
+            Paragraph("<b>Income &amp; Expense Item</b>", s["label"]),
+            _rp("<b>Current Rents</b>", bold=True, color=WHITE),
+            _rp(f"<b>Market Rents</b>", bold=True, color=WHITE),
+        ]
+        def _row(label, cur_val, mkt_val, bold=False):
+            return [
+                Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+                _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold,
+                    color=NAVY if bold else DGRAY),
+                _rp(f"<b>{mkt_val}</b>" if bold else mkt_val, bold=bold,
+                    color=PINK if bold else colors.HexColor("#C2185B")),
+            ]
+    else:
+        col_w = [3.5 * inch, 2.5 * inch]
+        header = [
+            Paragraph("<b>Income &amp; Expense Item</b>", s["label"]),
+            _rp("<b>Annual Amount</b>", bold=True, color=WHITE),
+        ]
+        def _row(label, cur_val, mkt_val=None, bold=False):
+            return [
+                Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+                _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold,
+                    color=NAVY if bold else DGRAY),
+            ]
+
+    rent_label = f"Monthly Rent/Unit — Current ({_money(rent_pu)})"
+    mkt_label  = f"Monthly Rent/Unit — Market ({_money(mkt_rent_pu)})"
+
+    table_data = [
+        header,
+        _row("Number of Units", str(units), str(units)),
+        _row(f"Monthly Rent per Unit",
+             _money(rent_pu), _money(mkt_rent_pu)),
+        _row("Gross Annual Rent",
+             _money(gross_cur), _money(gross_mkt)),
+        _row(f"Less Vacancy ({vacancy:.1f}%)",
+             f"({_money(gross_cur - eff_cur)})", f"({_money(gross_mkt - eff_mkt)})"),
+        _row("Effective Gross Income",
+             _money(eff_cur), _money(eff_mkt), bold=True),
+        _row("Property Taxes",
+             _money(taxes), _money(taxes)),
+        _row("Insurance",
+             _money(insurance), _money(insurance)),
+        _row("Maintenance &amp; Other",
+             _money(maintenance), _money(maintenance)),
+        _row("Total Operating Expenses",
+             f"({_money(expenses)})", f"({_money(expenses)})", bold=True),
+        _row("Net Operating Income (NOI)",
+             _money(noi_cur), _money(noi_mkt), bold=True),
+    ]
+
+    n_cols = 3 if has_market else 2
+    tbl = Table(table_data, colWidths=col_w)
+    tbl_style = [
+        ("BACKGROUND",    (0, 0), (-1, 0),   NAVY),
+        ("TEXTCOLOR",     (0, 0), (-1, 0),   WHITE),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1),  [WHITE, LGRAY]),
+        ("BACKGROUND",    (0, -1), (-1, -1), BLUSH),
+        ("LINEBELOW",     (0, -1), (-1, -1), 1.5, PINK),
+        ("LINEABOVE",     (0, -1), (-1, -1), 1.5, PINK),
+        ("TOPPADDING",    (0, 0), (-1, -1),  5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1),  5),
+        ("LEFTPADDING",   (0, 0), (-1, -1),  8),
+        ("RIGHTPADDING",  (0, 0), (-1, -1),  8),
+    ]
+    if has_market:
+        # Soft pink tint on market rent column
+        tbl_style += [
+            ("BACKGROUND", (2, 1), (2, -2), colors.HexColor("#FFF0F5")),
+            ("BACKGROUND", (2, -1), (2, -1), colors.HexColor("#FCE4EC")),
+        ]
+    tbl.setStyle(TableStyle(tbl_style))
+    elems.append(tbl)
+    elems.append(Spacer(1, 14))
+
+    # ── Cap rate callout box ──────────────────────────────────────────────────
+    if has_market:
+        # Two cap rates side by side
+        diff = cap_mkt - cap_cur
+        diff_str = f"+{diff:.2f}%" if diff >= 0 else f"{diff:.2f}%"
+        cap_data = [
+            [_rp("Recommended Price", align=TA_CENTER, color=NAVY),
+             _rp("Cap Rate — Current Rents", align=TA_CENTER, color=WHITE),
+             _rp("Cap Rate — Market Rents", align=TA_CENTER, color=WHITE),
+             _rp("Upside", align=TA_CENTER, color=WHITE)],
+            [_rp(f"<b>{_money(price_rec)}</b>", align=TA_CENTER, bold=True, color=NAVY, size=14),
+             _rp(f"<b>{cap_cur:.2f}%</b>", align=TA_CENTER, bold=True, color=WHITE, size=16),
+             _rp(f"<b>{cap_mkt:.2f}%</b>", align=TA_CENTER, bold=True, color=WHITE, size=16),
+             _rp(f"<b>{diff_str}</b>", align=TA_CENTER, bold=True, color=WHITE, size=14)],
+        ]
+        cap_tbl = Table(cap_data, colWidths=[1.8*inch, 1.7*inch, 1.7*inch, 1.0*inch])
+        cap_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (0, -1), BLUSH),
+            ("BACKGROUND",    (1, 0), (1, -1), NAVY),
+            ("BACKGROUND",    (2, 0), (2, -1), PINK),
+            ("BACKGROUND",    (3, 0), (3, -1), colors.HexColor("#C2185B")),
+            ("LINEBELOW",     (0, 0), (-1, 0), 0.5, colors.white),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("BOX",           (0, 0), (-1, -1), 1.5, PINK),
+            ("INNERGRID",     (0, 0), (-1, -1), 0.5, colors.white),
+        ]))
+        elems.append(KeepTogether([cap_tbl]))
+        elems.append(Spacer(1, 6))
+        elems.append(Paragraph(
+            f"<i>At market rents of {_money(mkt_rent_pu)}/unit/month, the projected cap rate "
+            f"would be <b>{cap_mkt:.2f}%</b> — an increase of {diff_str} over the current "
+            f"cap rate of <b>{cap_cur:.2f}%</b>.</i>",
+            s["body"]
+        ))
+    else:
+        # Single cap rate callout
+        cap_data = [
+            [_rp("Recommended Price", align=TA_CENTER, color=NAVY),
+             _rp("Net Operating Income", align=TA_CENTER, color=NAVY),
+             _rp("Cap Rate", align=TA_CENTER, color=WHITE)],
+            [_rp(f"<b>{_money(price_rec)}</b>", align=TA_CENTER, bold=True, color=NAVY, size=15),
+             _rp(f"<b>{_money(noi_cur)}</b>", align=TA_CENTER, bold=True, color=NAVY, size=15),
+             _rp(f"<b>{cap_cur:.2f}%</b>", align=TA_CENTER, bold=True, color=WHITE, size=18)],
+        ]
+        cap_tbl = Table(cap_data, colWidths=[2.2*inch, 2.2*inch, 1.6*inch])
+        cap_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (1, -1), BLUSH),
+            ("BACKGROUND",    (2, 0), (2, -1), PINK),
+            ("LINEBELOW",     (0, 0), (-1, 0), 0.5, PINK),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("BOX",           (0, 0), (-1, -1), 1.5, PINK),
+            ("INNERGRID",     (0, 0), (-1, -1), 0.5, PINK),
+        ]))
+        elems.append(KeepTogether([cap_tbl]))
+
+    elems.append(Spacer(1, 8))
+    elems.append(Paragraph(
+        "<i>Cap rate = NOI ÷ Recommended Price. This is an estimate based on provided figures "
+        "and should not substitute a full investment analysis or professional appraisal.</i>",
+        s["caption"]
+    ))
+
+    # ── Financing section (optional) ──────────────────────────────────────────
+    show_financing = subject.get("mf_show_financing", False)
+    if show_financing:
+        down_pct   = float(subject.get("mf_down_pct", 25.0))
+        rate       = float(subject.get("mf_interest_rate", 7.0))
+        term_yrs   = int(subject.get("mf_loan_term_yrs", 30))
+        down_amt   = subject.get("mf_down_amt", 0)
+        loan_amt   = subject.get("mf_loan_amt", 0)
+        monthly_pmt= subject.get("mf_monthly_payment", 0)
+        annual_ds  = subject.get("mf_annual_debt_service", 0)
+        cf_cur     = subject.get("mf_cf_cur", 0)
+        cf_mkt     = subject.get("mf_cf_mkt", 0)
+        coc_cur    = subject.get("mf_coc_cur", 0)
+        coc_mkt    = subject.get("mf_coc_mkt", 0)
+
+        GREEN = colors.HexColor("#2e7d32")
+        RED   = colors.HexColor("#c62828")
+
+        def _cf_color(val):
+            return GREEN if val >= 0 else RED
+
+        elems.append(Spacer(1, 10))
+        elems.append(HRFlowable(width="100%", thickness=1, color=NAVY, spaceAfter=6))
+        elems.append(Paragraph(
+            f"FINANCING SCENARIO — {down_pct:.0f}% Down @ {rate:.3f}% Interest, {term_yrs}-Year Term",
+            ParagraphStyle("fin_hdr", fontName="Times-Bold", fontSize=11,
+                           textColor=NAVY, spaceAfter=4)
+        ))
+
+        # Financing summary table
+        if has_market:
+            fin_col_w = [2.9*inch, 1.7*inch, 1.7*inch]
+            fin_header = [
+                Paragraph("<b>Item</b>", s["label"]),
+                _rp("<b>Current Rents</b>", bold=True, color=WHITE),
+                _rp("<b>Market Rents</b>", bold=True, color=WHITE),
+            ]
+            def _fin_row(label, cur_val, mkt_val, bold=False, cur_color=DGRAY, mkt_color=None):
+                mkt_color = mkt_color or cur_color
+                return [
+                    Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+                    _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold, color=cur_color),
+                    _rp(f"<b>{mkt_val}</b>" if bold else mkt_val, bold=bold, color=mkt_color),
+                ]
+        else:
+            fin_col_w = [3.5*inch, 2.5*inch]
+            fin_header = [
+                Paragraph("<b>Item</b>", s["label"]),
+                _rp("<b>Amount</b>", bold=True, color=WHITE),
+            ]
+            def _fin_row(label, cur_val, mkt_val=None, bold=False, cur_color=DGRAY, mkt_color=None):
+                return [
+                    Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+                    _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold, color=cur_color),
+                ]
+
+        fin_data = [
+            fin_header,
+            _fin_row("Purchase Price",       _money(price_rec),  _money(price_rec)),
+            _fin_row(f"Down Payment ({down_pct:.0f}%)", _money(down_amt), _money(down_amt)),
+            _fin_row("Loan Amount",          _money(loan_amt),   _money(loan_amt),  bold=True, cur_color=NAVY),
+            _fin_row(f"Monthly Payment ({rate:.3f}%, {term_yrs} yrs)",
+                                             _money(monthly_pmt), _money(monthly_pmt)),
+            _fin_row("Annual Debt Service",  f"({_money(annual_ds)})", f"({_money(annual_ds)})",
+                     bold=True, cur_color=NAVY),
+            _fin_row("NOI",                  _money(noi_cur),    _money(noi_mkt),
+                     cur_color=NAVY, mkt_color=PINK if has_market else NAVY),
+            _fin_row("Cash Flow After Financing",
+                     _money(cf_cur), _money(cf_mkt),
+                     bold=True,
+                     cur_color=_cf_color(cf_cur),
+                     mkt_color=_cf_color(cf_mkt)),
+            _fin_row(f"Cash-on-Cash Return (on {_money(down_amt)} down)",
+                     f"{coc_cur:.2f}%", f"{coc_mkt:.2f}%",
+                     bold=True,
+                     cur_color=_cf_color(coc_cur),
+                     mkt_color=_cf_color(coc_mkt)),
+        ]
+
+        fin_tbl = Table(fin_data, colWidths=fin_col_w)
+        fin_style = [
+            ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
+            ("BACKGROUND",    (0, -2), (-1, -1), BLUSH),
+            ("LINEABOVE",     (0, -2), (-1, -2), 1.5, NAVY),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        ]
+        if has_market:
+            fin_style += [
+                ("BACKGROUND", (2, 1), (2, -3), colors.HexColor("#FFF0F5")),
+                ("BACKGROUND", (2, -2), (2, -1), colors.HexColor("#FCE4EC")),
+            ]
+        fin_tbl.setStyle(TableStyle(fin_style))
+        elems.append(fin_tbl)
+        elems.append(Spacer(1, 10))
+
+        # ── Bank financing callout note ────────────────────────────────────
+        note_tbl = Table(
+            [[Paragraph(
+                "<b>⚠️  Important Note on Bank Financing</b><br/>"
+                "Commercial lenders typically require <b>a minimum of two years of documented "
+                "operating history</b> (rent rolls, tax returns, profit &amp; loss statements) "
+                "before approving a loan on a multi-family investment property. "
+                "A buyer without that track record will likely need to purchase in cash or "
+                "through a private/bridge lender at a higher rate until that history is established. "
+                "This financing scenario is illustrative and assumes the buyer qualifies for "
+                f"conventional commercial financing at {rate:.3f}%.",
+                s["body"]
+            )]],
+            colWidths=[6.0*inch]
+        )
+        note_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#FFF8E1")),
+            ("BOX",           (0, 0), (-1, -1), 1.5, colors.HexColor("#F9A825")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+        ]))
+        elems.append(KeepTogether([note_tbl]))
+
+    return elems
+
+
 def _build_cma_pdf_bytes(subject, comps, recommendations,
                           price_low, price_high, price_rec,
                           price_notes, logo_path, anr_url=None) -> bytes:
@@ -513,6 +826,11 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
     # Property overview
     story += _build_subject_overview(subject, s)
     story.append(_divider())
+
+    # Multi-family cap rate analysis (only for multi-family)
+    if subject.get("property_type") == "Multi Family" and subject.get("mf_units"):
+        story += _build_cap_rate_analysis(subject, price_rec, s)
+        story.append(_divider())
 
     # Recommendations
     story += _build_research_notes(subject, recommendations, s)
