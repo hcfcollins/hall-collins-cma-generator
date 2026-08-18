@@ -899,7 +899,11 @@ if _prop_type_now == "Multi Family":
                 A good CoC is generally <strong>{COC_LOW:.0f}–{COC_HIGH:.0f}%</strong>
                 ({_down_pct:.0f}% down @ {_rate_annual:.2f}%).
                 If the current recommended price doesn't hit that target, a price reduction may be needed —
-                and the cap rate rows above give you the ceiling for any such adjustment.
+                and the cap rate rows above give you the ceiling for any such adjustment.<br><br>
+                <strong style="color:#173348;">To deliver a minimum {COC_LOW:.0f}% CoC on current rents,
+                the price would need to be at or below
+                <span style="font-size:1.05rem;">${_pr_coc8_cur:,}</span>.</strong>
+                {f'At market rents, that floor rises to <strong>${_pr_coc8_mkt:,}</strong>.' if _has_upside and _pr_coc8_mkt > 0 else ''}
               </div>
             </td></tr>""" if _show_financing and _pr_coc8_cur > 0 else ""
 

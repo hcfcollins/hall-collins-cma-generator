@@ -1066,6 +1066,12 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             elems.append(Spacer(1, 14))
 
             fin_lbl = f"{down_pct_v:.0f}% down @ {rate_v:.2f}% / {term_v} yr"
+            _coc8_floor_cur = subject.get("mf_pr_coc8_cur", 0)
+            _coc8_floor_mkt = subject.get("mf_pr_coc8_mkt", 0)
+            _mkt_floor_note = (
+                f"  At market rents, that floor rises to <b>{_money(_coc8_floor_mkt)}</b>."
+                if has_market and _coc8_floor_mkt > 0 else ""
+            )
             elems.append(Paragraph(
                 f"<b>A Note on Financing and List Price Strategy</b><br/><br/>"
                 f"Most serious multi-family investors in this market purchase in cash or with significant "
@@ -1077,7 +1083,9 @@ def _build_cap_rate_analysis(subject, price_rec, s):
                 f"The table below shows what today's recommended price ({_money(price_rec)}) actually "
                 f"delivers on a financed basis ({fin_lbl}). "
                 f"If that number is below {coc_lo:.0f}%, a price reduction may be necessary to attract "
-                f"financed buyers — and the cap rate target rows above give you the ceiling for any such adjustment.",
+                f"financed buyers — and the cap rate target rows above give you the ceiling for any such adjustment.<br/><br/>"
+                f"<b>To deliver a minimum {coc_lo:.0f}% CoC on current rents, the price would need to be "
+                f"at or below {_money(_coc8_floor_cur)}.</b>{_mkt_floor_note}",
                 _blurb_style
             ))
             elems.append(Spacer(1, 8))
