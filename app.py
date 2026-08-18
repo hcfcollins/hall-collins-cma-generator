@@ -511,6 +511,23 @@ if _prop_type_now == "Multi Family":
             "Annual Maintenance & Other Expenses ($)", min_value=0, step=100,
             value=int(_sd.get("mf_maintenance", 2000)), key="mf_maintenance"
         )
+    st.markdown(
+        "**Capital Reserve Buffer** — set aside a % of gross rent per unit for big-ticket replacements "
+        "*(roof, heating system, appliances, painting, etc.)*"
+    )
+    _res_col1, _res_col2 = st.columns([1, 3])
+    with _res_col1:
+        _sd["mf_reserve_pct"] = st.number_input(
+            "Reserve (% of gross rent)", min_value=0.0, max_value=30.0, step=0.5,
+            value=float(_sd.get("mf_reserve_pct", 5.0)), key="mf_reserve_pct",
+            help="A common rule of thumb is 5–10% of gross rent. This is deducted from NOI as an operating expense."
+        )
+    with _res_col2:
+        st.caption(
+            "Common rule of thumb: **5%** per unit for newer/well-maintained buildings, "
+            "**8–10%** for older buildings or those with aging systems. "
+            "This reduces NOI and therefore the income-based price — making it a more conservative, realistic estimate."
+        )
 
     # ── Per-unit rent breakdown ────────────────────────────────────────────
     st.markdown("**Rent by Unit** — enter current and market rent for each unit")
@@ -600,7 +617,7 @@ if _prop_type_now == "Multi Family":
     _taxes        = int(_sd.get("mf_taxes", 4000))
     _insurance    = int(_sd.get("mf_insurance", 1500))
     _maintenance  = int(_sd.get("mf_maintenance", 2000))
-    _expenses     = _taxes + _insurance + _maintenance
+    _reserve_pct  = float(_sd.get("mf_reserve_pct", 5.0))
     _price_for_cap = st.session_state.get("price_rec", st.session_state.get("price_high", 450000))
 
     # Sum across all units
@@ -610,12 +627,18 @@ if _prop_type_now == "Multi Family":
     _rent_pu      = int(_gross_cur / 12 / _units) if _units > 0 else 0
     _mkt_rent_pu  = int(_gross_mkt / 12 / _units) if _units > 0 else 0
 
+    _reserve_cur  = _gross_cur * (_reserve_pct / 100)
+    _reserve_mkt  = _gross_mkt * (_reserve_pct / 100)
+    _base_expenses = _taxes + _insurance + _maintenance
+    _expenses     = _base_expenses + _reserve_cur   # total expenses at current rents
+    _expenses_mkt = _base_expenses + _reserve_mkt   # total expenses at market rents
+
     _eff_cur      = _gross_cur * (1 - _vacancy / 100)
     _noi_cur      = _eff_cur - _expenses
     _cap_cur      = (_noi_cur / _price_for_cap * 100) if _price_for_cap > 0 else 0.0
 
     _eff_mkt      = _gross_mkt * (1 - _vacancy / 100)
-    _noi_mkt      = _eff_mkt - _expenses
+    _noi_mkt      = _eff_mkt - _expenses_mkt
     _cap_mkt      = (_noi_mkt / _price_for_cap * 100) if _price_for_cap > 0 else 0.0
     _has_upside   = _gross_mkt != _gross_cur
 
@@ -643,6 +666,10 @@ if _prop_type_now == "Multi Family":
     _sd["mf_gross_income"]       = _gross_cur
     _sd["mf_eff_gross"]          = _eff_cur
     _sd["mf_total_expenses"]     = _expenses
+    _sd["mf_total_expenses_mkt"] = _expenses_mkt
+    _sd["mf_reserve_cur"]        = round(_reserve_cur)
+    _sd["mf_reserve_mkt"]        = round(_reserve_mkt)
+    _sd["mf_base_expenses"]      = _base_expenses
     _sd["mf_noi"]                = _noi_cur
     _sd["mf_cap_rate"]           = round(_cap_cur, 2)
     _sd["mf_gross_income_mkt"]   = _gross_mkt
@@ -717,8 +744,11 @@ if _prop_type_now == "Multi Family":
                 <td style="text-align:right;padding:3px 8px;">${_eff_cur:,.0f}</td>
                 {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>${:,.0f}</td>".format(_eff_mkt) if _has_upside else ""}</tr>
             <tr><td style="padding:3px 8px;">Operating Expenses</td>
-                <td style="text-align:right;padding:3px 8px;">(${_expenses:,.0f})</td>
-                {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>(${:,.0f})</td>".format(_expenses) if _has_upside else ""}</tr>
+                <td style="text-align:right;padding:3px 8px;">(${_base_expenses:,.0f})</td>
+                {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>(${:,.0f})</td>".format(_base_expenses) if _has_upside else ""}</tr>
+            <tr style="background:#f9f0f4;"><td style="padding:3px 8px;">Capital Reserve <span style="color:#999;font-size:0.82rem;">({_reserve_pct:.0f}% of gross — roof, HVAC, etc.)</span></td>
+                <td style="text-align:right;padding:3px 8px;">(${_reserve_cur:,.0f})</td>
+                {"<td style='text-align:right;padding:3px 8px;color:#E91E63;'>(${:,.0f})</td>".format(_reserve_mkt) if _has_upside else ""}</tr>
             <tr style="border-top:1px solid #E91E63;background:#fff0f5;"><td style="padding:5px 8px;font-weight:700;">NOI</td>
                 <td style="text-align:right;padding:5px 8px;font-weight:700;">${_noi_cur:,.0f}</td>
                 {"<td style='text-align:right;padding:5px 8px;font-weight:700;color:#E91E63;'>${:,.0f}</td>".format(_noi_mkt) if _has_upside else ""}</tr>
@@ -853,7 +883,7 @@ if _prop_type_now == "Multi Family":
             <div style="font-family:Georgia;font-size:0.85rem;color:#444;line-height:1.5;margin-bottom:10px;padding:10px 12px;background:#fff;border-left:3px solid #173348;border-radius:4px;">
               <strong>Cap Rate</strong> measures return on an <em>all-cash</em> purchase — NOI ÷ Price.
               No mortgage, no debt — just pure income return. A 7% cap rate means the property generates
-              7¢ of income for every $1 paid. Investors targeting a 7–11% cap rate are typical in Vermont multi-family.<br><br>
+              7¢ of income for every $1 paid. Investors targeting a 7–11% cap rate are typical in Northern New England multi-family.<br><br>
               <strong>Cash-on-Cash Return (CoC)</strong> measures return on the <em>actual cash invested</em> — the down payment —
               after paying the mortgage. Because you're using leverage, CoC can be higher than the cap rate
               when financing makes sense. An 8–12% CoC is generally considered a good leveraged return.

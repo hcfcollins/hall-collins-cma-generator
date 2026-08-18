@@ -506,7 +506,11 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     taxes        = subject.get("mf_taxes", 0)
     insurance    = subject.get("mf_insurance", 0)
     maintenance  = subject.get("mf_maintenance", 0)
-    expenses     = subject.get("mf_total_expenses", taxes + insurance + maintenance)
+    reserve_pct  = float(subject.get("mf_reserve_pct", 5.0))
+    reserve_cur  = subject.get("mf_reserve_cur", round(gross_cur * reserve_pct / 100))
+    reserve_mkt  = subject.get("mf_reserve_mkt", round(gross_mkt * reserve_pct / 100))
+    base_expenses = subject.get("mf_base_expenses", taxes + insurance + maintenance)
+    expenses     = subject.get("mf_total_expenses", base_expenses + reserve_cur)
 
     gross_cur   = subject.get("mf_gross_income", 0)
     eff_cur     = subject.get("mf_eff_gross", gross_cur * (1 - vacancy / 100))
@@ -678,8 +682,10 @@ def _build_cap_rate_analysis(subject, price_rec, s):
              _money(insurance), _money(insurance)),
         _row("Maintenance &amp; Other",
              _money(maintenance), _money(maintenance)),
+        _row(f"Capital Reserve ({reserve_pct:.0f}% of gross — roof/HVAC/appliances)",
+             f"({_money(reserve_cur)})", f"({_money(reserve_mkt)})"),
         _row("Total Operating Expenses",
-             f"({_money(expenses)})", f"({_money(expenses)})", bold=True),
+             f"({_money(expenses)})", f"({_money(base_expenses + reserve_mkt)})", bold=True),
         _row("Net Operating Income (NOI)",
              _money(noi_cur), _money(noi_mkt), bold=True),
     ]
@@ -931,7 +937,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             "<b>Cap Rate</b> measures return on an <i>all-cash</i> purchase — NOI ÷ Price. "
             "No mortgage, no leverage — just pure income return. "
             "A 7% cap rate means the property generates 7¢ of income for every $1 paid. "
-            f"Investors targeting a {cap_lo:.0f}–{cap_hi:.0f}% cap rate are typical in Vermont multi-family.  "
+            f"Investors targeting a {cap_lo:.0f}–{cap_hi:.0f}% cap rate are typical in Northern New England multi-family.  "
             "<b>Cash-on-Cash Return (CoC)</b> measures return on the <i>actual cash invested</i> — "
             "the down payment — after paying the mortgage. Because of leverage, CoC can exceed the cap rate "
             f"when financing is favorable. An {coc_lo:.0f}–{coc_hi:.0f}% CoC is generally considered a strong leveraged return. "
@@ -1026,7 +1032,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         elems.append(Paragraph(
             f"<i>★ Cap rate = NOI ÷ Price (cash basis, no debt). These are income-based price targets "
             f"for investor buyers. Final list price may differ based on comparable sales, condition, "
-            f"and market demand. {cap_lo:.0f}–{cap_hi:.0f}% is a typical Vermont multi-family cap rate range.</i>",
+            f"and market demand. {cap_lo:.0f}–{cap_hi:.0f}% is a typical Northern New England multi-family cap rate range.</i>",
             s["caption"]
         ))
 
