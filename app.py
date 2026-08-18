@@ -1015,7 +1015,7 @@ if st.session_state.get("s_type") == "Multi Family":
     mf_rec_col1, mf_rec_col2 = st.columns(2)
     with mf_rec_col1:
         rec_organize_leases = st.checkbox("📁 Organize Leases & Tenant Documents", key="rec_organize_leases")
-        rec_evict_tenants   = st.checkbox("🚪 Consider Evicting Problem Tenants", key="rec_evict_tenants")
+        rec_evict_tenants   = st.checkbox("🚪 Consider Evicting Tenants Before Listing", key="rec_evict_tenants")
     with mf_rec_col2:
         rec_system_repairs  = st.checkbox("🔧 Make Repairs to Major Systems", key="rec_system_repairs")
 else:

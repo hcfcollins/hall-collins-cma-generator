@@ -380,13 +380,17 @@ def _build_research_notes(subject, recommendations, s):
             "into a single folder now. Being organized and transparent with this documentation "
             "builds buyer confidence, speeds up due diligence, and can prevent deal-killing "
             "surprises during the contract period."),
-        "evict_tenants": ("Consider Evicting Problem Tenants",
-            "Problem tenants — those with a history of late payments, lease violations, or "
-            "ongoing disputes — can significantly reduce the pool of qualified buyers and "
-            "lower the price a buyer is willing to pay. A property with stable, paying tenants "
-            "in place is far more attractive than one carrying known tenancy issues into a sale. "
-            "We recommend consulting with a local attorney about your options before listing. "
-            "In many cases, addressing tenancy issues in advance results in a faster, higher-value sale."),
+        "evict_tenants": ("Consider Evicting Tenants Before Listing",
+            "In some cases, the strongest move before listing is to start with a clean slate. "
+            "This is especially true when current rents are significantly below market — "
+            "a buyer inheriting a long-term tenant at $800/month on a unit worth $1,400/month "
+            "is effectively buying a discounted income stream with limited near-term upside. "
+            "Listing the unit vacant allows a new owner to set market rents immediately, "
+            "which can meaningfully increase the property's value and the buyer pool. "
+            "It may also apply when there are lease violations, non-payment history, or "
+            "month-to-month situations where a clean transition serves everyone's interests. "
+            "We recommend consulting with a local attorney about notice requirements and "
+            "timing before proceeding."),
         "system_repairs": ("Make Repairs to Major Systems",
             "Buyers of investment properties pay close attention to the condition and age of "
             "major systems — heating, plumbing, electrical, and roofing. Known deferred "
