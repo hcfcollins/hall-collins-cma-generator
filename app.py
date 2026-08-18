@@ -556,6 +556,24 @@ if _prop_type_now == "Multi Family":
                 key=f"mf_unit_mkt_{_i}"
             )
 
+    # ── What's Included in Rent ───────────────────────────────────────────
+    st.markdown("**What's Included in Rent?** *(check all that apply — will appear in the CMA report)*")
+    _util_opts = ["Electric", "Heat", "Plowing", "Mowing", "Trash", "Internet"]
+    _util_icons = {"Electric": "⚡", "Heat": "🔥", "Plowing": "❄️", "Mowing": "🌿", "Trash": "🗑️", "Internet": "📶"}
+    _existing_utils = _sd.get("mf_included_utilities", [])
+    _util_cols = st.columns(len(_util_opts))
+    _selected_utils = []
+    for _ui, _uopt in enumerate(_util_opts):
+        with _util_cols[_ui]:
+            _checked = st.checkbox(
+                f"{_util_icons[_uopt]} {_uopt}",
+                value=(_uopt in _existing_utils),
+                key=f"mf_util_{_uopt.lower()}"
+            )
+            if _checked:
+                _selected_utils.append(_uopt)
+    _sd["mf_included_utilities"] = _selected_utils
+
     st.markdown("**Financing Scenario** *(optional — for cash-flow-after-financing analysis)*")
     fin_col1, fin_col2, fin_col3 = st.columns(3)
     with fin_col1:
@@ -740,6 +758,18 @@ if _prop_type_now == "Multi Family":
         return (cf / down * 100) if down > 0 else 0.0, cf, ads
 
     CAP_LOW, CAP_HIGH = 7.0, 11.0
+    COC_LOW, COC_HIGH = 8.0, 12.0
+
+    def _price_at_coc(noi, coc_target_pct, down_pct, rate_annual, term_yrs):
+        """Solve price = NOI / (CoC×d + (1−d)×k) where k = annual payment factor."""
+        if noi <= 0 or down_pct <= 0 or rate_annual <= 0:
+            return 0
+        d  = down_pct / 100.0
+        r  = (rate_annual / 100.0) / 12.0
+        n  = term_yrs * 12
+        k  = r * (1 + r) ** n / ((1 + r) ** n - 1) * 12  # annual pmt per $1 of loan
+        denom = (coc_target_pct / 100.0) * d + (1.0 - d) * k
+        return int(noi / denom) if denom > 0 else 0
 
     if _noi_cur > 0:
         _pr_at_7_cur  = _price_at_cap(_noi_cur, CAP_LOW)
@@ -747,97 +777,104 @@ if _prop_type_now == "Multi Family":
         _pr_at_7_mkt  = _price_at_cap(_noi_mkt, CAP_LOW)  if _has_upside else 0
         _pr_at_11_mkt = _price_at_cap(_noi_mkt, CAP_HIGH) if _has_upside else 0
 
-        # For each price point, compute financed metrics
-        def _fin_cols(noi, price):
-            if not _show_financing or price <= 0:
-                return "", "", ""
-            coc, cf, ads = _leveraged_return(noi, price, _down_pct, _rate_annual, _term_yrs)
-            down = price * (_down_pct / 100)
-            cf_c = _cf_color(cf)
-            return (
-                f"${ads:,.0f}/yr",
-                f"<span style='color:{cf_c};font-weight:700;'>${cf:,.0f}/yr</span>",
-                f"<span style='color:{cf_c};font-weight:700;'>{coc:.2f}%</span>",
-            )
+        _pr_coc8_cur  = _price_at_coc(_noi_cur, COC_LOW,  _down_pct, _rate_annual, _term_yrs) if _show_financing else 0
+        _pr_coc12_cur = _price_at_coc(_noi_cur, COC_HIGH, _down_pct, _rate_annual, _term_yrs) if _show_financing else 0
+        _pr_coc8_mkt  = _price_at_coc(_noi_mkt, COC_LOW,  _down_pct, _rate_annual, _term_yrs) if (_show_financing and _has_upside) else 0
+        _pr_coc12_mkt = _price_at_coc(_noi_mkt, COC_HIGH, _down_pct, _rate_annual, _term_yrs) if (_show_financing and _has_upside) else 0
 
-        def _rec_row_html(label, price, noi, pink=False, separator=False):
-            c = "#E91E63" if pink else "#173348"
+        def _rec_row_html(label, price, ret_val, pink=False):
+            c  = "#E91E63" if pink else "#173348"
             bg = "#FFF0F5" if pink else "#EEF3F8"
-            sep = f"border-top:2px solid #173348;" if separator else ""
-            ads_str, cf_str, coc_str = _fin_cols(noi, price)
-            fin_td = (
-                f"<td style='text-align:right;padding:4px 6px;font-size:0.85rem;'>{ads_str}</td>"
-                f"<td style='text-align:right;padding:4px 6px;font-size:0.85rem;'>{cf_str}</td>"
-                f"<td style='text-align:right;padding:4px 6px;font-size:0.85rem;'>{coc_str}</td>"
-            ) if _show_financing else ""
             return (
-                f"<tr style='background:{bg};{sep}'>"
+                f"<tr style='background:{bg};'>"
                 f"<td style='padding:5px 8px;color:{c};font-weight:600;font-size:0.88rem;'>{label}</td>"
                 f"<td style='text-align:right;padding:5px 8px;color:{c};font-weight:700;font-size:1rem;'>${price:,.0f}</td>"
-                f"{fin_td}"
+                f"<td style='text-align:right;padding:5px 8px;color:{c};font-weight:600;'>{ret_val:.1f}%</td>"
                 f"</tr>"
             )
 
-        _fin_header = (
-            "<th style='text-align:right;padding:4px 6px;color:#fff;background:#173348;font-size:0.82rem;'>Debt Svc/yr</th>"
-            "<th style='text-align:right;padding:4px 6px;color:#fff;background:#173348;font-size:0.82rem;'>Cash Flow/yr</th>"
-            "<th style='text-align:right;padding:4px 6px;color:#fff;background:#173348;font-size:0.82rem;'>CoC Return</th>"
-        ) if _show_financing else ""
+        def _section_hdr(text, colspan=3, pink=False, top_border=False):
+            c  = "#E91E63" if pink else "#173348"
+            bg = "#FCE4EC" if pink else "#D8E4F0"
+            tb = f"border-top:2px solid {c};" if top_border else ""
+            return f"<tr style='background:{bg};{tb}'><td colspan='{colspan}' style='padding:6px 8px 3px;color:{c};font-weight:700;font-size:0.82rem;'>{text}</td></tr>"
 
-        _fin_subheader = (
-            f"<div style='font-family:Georgia;font-size:0.8rem;color:#555;margin-bottom:6px;'>"
-            f"Financing columns assume <strong>{_down_pct:.0f}% down</strong> @ "
-            f"<strong>{_rate_annual:.3f}%</strong> for <strong>{_term_yrs} years</strong> "
-            f"(CoC = cash-on-cash return on the down payment)."
-            f"</div>"
-        ) if _show_financing else ""
-
-        _mkt_rows_html = ""
+        # Cap-rate rows
+        _cap_rows_cur = (
+            _rec_row_html(f"{CAP_LOW:.0f}% cap rate — investor ceiling", _pr_at_7_cur, CAP_LOW)
+            + _rec_row_html(f"{CAP_HIGH:.0f}% cap rate — strong investor value", _pr_at_11_cur, CAP_HIGH)
+        )
+        _cap_rows_mkt = ""
         if _has_upside and _pr_at_7_mkt > 0:
-            _mkt_rows_html = (
-                f"<tr><td colspan='{'7' if _show_financing else '2'}' style='padding:5px 8px 2px;color:#E91E63;font-weight:700;font-size:0.82rem;border-top:2px solid #E91E63;'>📈 At Market Rents</td></tr>"
-                + _rec_row_html(f"{CAP_LOW:.0f}% cash cap rate (investor ceiling)", _pr_at_7_mkt, _noi_mkt, pink=True)
-                + _rec_row_html(f"{CAP_HIGH:.0f}% cash cap rate (strong value)", _pr_at_11_mkt, _noi_mkt, pink=True)
+            _cap_rows_mkt = (
+                _section_hdr(f"📈 At Market Rents — NOI ${_noi_mkt:,.0f}/yr", pink=True, top_border=True)
+                + _rec_row_html(f"{CAP_LOW:.0f}% cap rate at market rents", _pr_at_7_mkt, CAP_LOW, pink=True)
+                + _rec_row_html(f"{CAP_HIGH:.0f}% cap rate at market rents", _pr_at_11_mkt, CAP_HIGH, pink=True)
             )
 
+        # CoC rows (only if financing entered)
+        _coc_rows = ""
+        if _show_financing and _pr_coc8_cur > 0:
+            _fin_label = f"{_down_pct:.0f}% down @ {_rate_annual:.2f}% — {_term_yrs} yr"
+            _coc_rows = (
+                _section_hdr(f"🏦 Financed Buyer — Cash-on-Cash Return ({_fin_label})", top_border=True)
+                + _rec_row_html(f"{COC_LOW:.0f}% CoC — solid leveraged return", _pr_coc8_cur, COC_LOW)
+                + _rec_row_html(f"{COC_HIGH:.0f}% CoC — strong leveraged return", _pr_coc12_cur, COC_HIGH)
+            )
+            if _has_upside and _pr_coc8_mkt > 0:
+                _coc_rows += (
+                    _section_hdr(f"📈 Financed at Market Rents ({_fin_label})", pink=True, top_border=True)
+                    + _rec_row_html(f"{COC_LOW:.0f}% CoC at market rents", _pr_coc8_mkt, COC_LOW, pink=True)
+                    + _rec_row_html(f"{COC_HIGH:.0f}% CoC at market rents", _pr_coc12_mkt, COC_HIGH, pink=True)
+                )
+
         # Store for PDF
-        _sd["mf_pr_at_7_cur"]  = _pr_at_7_cur
-        _sd["mf_pr_at_11_cur"] = _pr_at_11_cur
-        _sd["mf_pr_at_7_mkt"]  = _pr_at_7_mkt
-        _sd["mf_pr_at_11_mkt"] = _pr_at_11_mkt
-        _sd["mf_cap_low"]      = CAP_LOW
-        _sd["mf_cap_high"]     = CAP_HIGH
+        _sd["mf_pr_at_7_cur"]   = _pr_at_7_cur
+        _sd["mf_pr_at_11_cur"]  = _pr_at_11_cur
+        _sd["mf_pr_at_7_mkt"]   = _pr_at_7_mkt
+        _sd["mf_pr_at_11_mkt"]  = _pr_at_11_mkt
+        _sd["mf_cap_low"]       = CAP_LOW
+        _sd["mf_cap_high"]      = CAP_HIGH
+        _sd["mf_pr_coc8_cur"]   = _pr_coc8_cur
+        _sd["mf_pr_coc12_cur"]  = _pr_coc12_cur
+        _sd["mf_pr_coc8_mkt"]   = _pr_coc8_mkt
+        _sd["mf_pr_coc12_mkt"]  = _pr_coc12_mkt
+        _sd["mf_coc_low"]       = COC_LOW
+        _sd["mf_coc_high"]      = COC_HIGH
+
+        _coc_col_note = f" &nbsp;·&nbsp; <em>CoC assumes {_down_pct:.0f}% down @ {_rate_annual:.2f}%</em>" if _show_financing else ""
 
         st.markdown(
             f"""
             <div style="background:#F0F7FF;border:2px solid #173348;border-radius:8px;padding:14px 20px;margin-top:12px;">
-            <div style="font-family:Georgia;color:#173348;font-size:1rem;font-weight:700;margin-bottom:6px;">
+            <div style="font-family:Georgia;color:#173348;font-size:1rem;font-weight:700;margin-bottom:8px;">
               💡 Income-Based Price Recommendation
             </div>
-            <div style="font-family:Georgia;font-size:0.85rem;color:#555;margin-bottom:8px;">
-              The <strong>cash cap rate</strong> (7–11% target) is the primary metric — it measures
-              return on a cash purchase. When financing is used, the <strong>cash-on-cash return</strong>
-              measures return on just the down payment. Both are shown below at key price points.
+            <div style="font-family:Georgia;font-size:0.85rem;color:#444;line-height:1.5;margin-bottom:10px;padding:10px 12px;background:#fff;border-left:3px solid #173348;border-radius:4px;">
+              <strong>Cap Rate</strong> measures return on an <em>all-cash</em> purchase — NOI ÷ Price.
+              No mortgage, no debt — just pure income return. A 7% cap rate means the property generates
+              7¢ of income for every $1 paid. Investors targeting a 7–11% cap rate are typical in Vermont multi-family.<br><br>
+              <strong>Cash-on-Cash Return (CoC)</strong> measures return on the <em>actual cash invested</em> — the down payment —
+              after paying the mortgage. Because you're using leverage, CoC can be higher than the cap rate
+              when financing makes sense. An 8–12% CoC is generally considered a good leveraged return.
             </div>
-            {_fin_subheader}
             <table style="width:100%;font-family:Georgia;font-size:0.9rem;border-collapse:collapse;">
               <thead>
                 <tr>
-                  <th style="text-align:left;padding:4px 8px;color:#fff;background:#173348;">Price Scenario</th>
-                  <th style="text-align:right;padding:4px 8px;color:#fff;background:#173348;">Implied Price</th>
-                  {_fin_header}
+                  <th style="text-align:left;padding:5px 8px;color:#fff;background:#173348;">Price Scenario</th>
+                  <th style="text-align:right;padding:5px 8px;color:#fff;background:#173348;">Implied Price</th>
+                  <th style="text-align:right;padding:5px 8px;color:#fff;background:#173348;">Return %</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td colspan="{'7' if _show_financing else '2'}" style="padding:5px 8px 2px;color:#173348;font-weight:700;font-size:0.82rem;">💵 Cash Buyer Analysis — Current Rents</td></tr>
-                {_rec_row_html(f"{CAP_LOW:.0f}% cash cap rate — investor ceiling (NOI ÷ price = {CAP_LOW}%)", _pr_at_7_cur, _noi_cur)}
-                {_rec_row_html(f"{CAP_HIGH:.0f}% cash cap rate — strong investor value", _pr_at_11_cur, _noi_cur)}
-                {_mkt_rows_html}
+                {_section_hdr(f"💵 Cash Purchase — Cap Rate &nbsp;·&nbsp; Current NOI ${_noi_cur:,.0f}/yr")}
+                {_cap_rows_cur}
+                {_cap_rows_mkt}
+                {_coc_rows}
               </tbody>
             </table>
             <div style="font-size:0.78rem;color:#888;margin-top:8px;font-style:italic;">
-              Cap rate = NOI ÷ Price (cash, no debt). Cash-on-cash = (NOI − Debt Service) ÷ Down Payment.
-              These are income-based targets; final list price reflects comps and market conditions.
+              A lower price = higher return = more attractive to investors. Final list price reflects comps and market conditions, not income alone.{_coc_col_note}
             </div>
             </div>
             """,
@@ -851,11 +888,37 @@ if _prop_type_now == "Multi Family":
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">Step 2 — Price Recommendation</div>', unsafe_allow_html=True)
 
+# ── Auto-seed price range from income analysis (multi-family only) ──────────
+_mf_low_suggest  = st.session_state.subject_data.get("mf_pr_at_11_cur", 0)   # 11% cap = conservative floor
+_mf_high_suggest = st.session_state.subject_data.get("mf_pr_at_7_cur", 0)    # 7% cap  = investor ceiling
+_mf_rec_suggest  = st.session_state.subject_data.get("mf_pr_at_7_mkt", 0) or _mf_high_suggest  # market upside or ceiling
+
+_is_mf = st.session_state.get("s_type") == "Multi Family"
+_has_income_data = _mf_low_suggest > 0 and _mf_high_suggest > 0
+
+if _is_mf and _has_income_data:
+    # Only seed if user hasn't manually changed these yet (i.e., they're still at defaults)
+    _default_low  = round(_mf_low_suggest  / 5000) * 5000
+    _default_high = round(_mf_high_suggest / 5000) * 5000
+    _default_rec  = round(_mf_rec_suggest  / 1000) * 1000
+    if "price_low" not in st.session_state:
+        st.session_state["price_low"] = _default_low
+    if "price_high" not in st.session_state:
+        st.session_state["price_high"] = _default_high
+    st.info(
+        f"💡 **Income-based suggestion** — "
+        f"based on current NOI, a 7–11% cap rate implies a price range of "
+        f"**${_default_low:,} – ${_default_high:,}**. "
+        f"{'Market rents support up to ' + '${:,}'.format(round(st.session_state.subject_data.get('mf_pr_at_7_mkt',0)/5000)*5000) + '. ' if st.session_state.subject_data.get('mf_pr_at_7_mkt',0) > 0 else ''}"
+        f"Adjust below as needed based on comps and condition.",
+        icon=None,
+    )
+
 p1, p2 = st.columns(2)
 with p1:
-    price_low = st.number_input("Lowest Price — As-Is ($)", min_value=0, value=400000, step=5000, key="price_low")
+    price_low = st.number_input("Lowest Price — As-Is ($)", min_value=0, value=int(st.session_state.get("price_low", 400000)), step=5000, key="price_low")
 with p2:
-    price_high = st.number_input("Highest Price — Instagram-Worthy ($)", min_value=0, value=450000, step=5000, key="price_high")
+    price_high = st.number_input("Highest Price — Instagram-Worthy ($)", min_value=0, value=int(st.session_state.get("price_high", 450000)), step=5000, key="price_high")
 
 # Recommended price slider between low and high
 _slider_min = int(price_low) if price_low else 0

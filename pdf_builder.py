@@ -610,7 +610,30 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             u_style += [("BACKGROUND", (3, 1), (3, -2), colors.HexColor("#FFF0F5"))]
         u_tbl.setStyle(TableStyle(u_style))
         elems.append(u_tbl)
-        elems.append(Spacer(1, 10))
+
+        # ── Included-in-rent utilities ────────────────────────────────────
+        _util_icons = {
+            "Electric": "⚡ Electric", "Heat": "🔥 Heat", "Plowing": "❄️ Plowing",
+            "Mowing": "🌿 Mowing", "Trash": "🗑️ Trash", "Internet": "📶 Internet",
+        }
+        _included = subject.get("mf_included_utilities", [])
+        if _included:
+            _badge_text = "  ·  ".join(_util_icons.get(u, u) for u in _included)
+            elems.append(Paragraph(
+                f"<b>Included in rent:</b>  {_badge_text}",
+                ParagraphStyle("_util", fontName="Times-Roman", fontSize=9,
+                               textColor=colors.HexColor("#2e7d32"),
+                               backColor=colors.HexColor("#F1F8E9"),
+                               borderPadding=(4, 8, 4, 8), spaceAfter=6,
+                               leftIndent=2, rightIndent=2)
+            ))
+        else:
+            elems.append(Paragraph(
+                "<i>No utilities included in rent.</i>",
+                ParagraphStyle("_util_none", fontName="Times-Italic", fontSize=9,
+                               textColor=DGRAY, spaceAfter=6)
+            ))
+        elems.append(Spacer(1, 6))
 
     # ── Income/expense summary table ──────────────────────────────────────────
     if has_market:
@@ -885,20 +908,16 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     pr_at_11_mkt = subject.get("mf_pr_at_11_mkt", 0)
     cap_lo       = subject.get("mf_cap_low", 7.0)
     cap_hi       = subject.get("mf_cap_high", 11.0)
+    pr_coc8_cur  = subject.get("mf_pr_coc8_cur", 0)
+    pr_coc12_cur = subject.get("mf_pr_coc12_cur", 0)
+    pr_coc8_mkt  = subject.get("mf_pr_coc8_mkt", 0)
+    pr_coc12_mkt = subject.get("mf_pr_coc12_mkt", 0)
+    coc_lo       = subject.get("mf_coc_low", 8.0)
+    coc_hi       = subject.get("mf_coc_high", 12.0)
     show_fin     = subject.get("mf_show_financing", False)
     down_pct_v   = float(subject.get("mf_down_pct", 25.0))
     rate_v       = float(subject.get("mf_interest_rate", 7.0))
     term_v       = int(subject.get("mf_loan_term_yrs", 30))
-
-    def _ads_for_price_pdf(price):
-        loan = price * (1 - down_pct_v / 100)
-        rm   = (rate_v / 100) / 12
-        n    = term_v * 12
-        if rm > 0 and loan > 0:
-            pmt = loan * (rm * (1 + rm) ** n) / ((1 + rm) ** n - 1)
-        else:
-            pmt = loan / n if n > 0 else 0
-        return pmt * 12
 
     if pr_at_7_cur > 0:
         elems.append(Spacer(1, 14))
@@ -909,10 +928,15 @@ def _build_cap_rate_analysis(subject, price_rec, s):
                            textColor=NAVY, spaceAfter=4)
         ))
         elems.append(Paragraph(
-            f"The <b>cash cap rate</b> (target: {cap_lo:.0f}%–{cap_hi:.0f}%) is the primary investor metric — "
-            f"it measures return on an all-cash purchase (NOI ÷ Price). "
-            f"When financing is used, the <b>cash-on-cash return</b> measures return on just the "
-            f"down payment after paying debt service. Both are shown below at key price points.",
+            "<b>Cap Rate</b> measures return on an <i>all-cash</i> purchase — NOI ÷ Price. "
+            "No mortgage, no leverage — just pure income return. "
+            "A 7% cap rate means the property generates 7¢ of income for every $1 paid. "
+            f"Investors targeting a {cap_lo:.0f}–{cap_hi:.0f}% cap rate are typical in Vermont multi-family.  "
+            "<b>Cash-on-Cash Return (CoC)</b> measures return on the <i>actual cash invested</i> — "
+            "the down payment — after paying the mortgage. Because of leverage, CoC can exceed the cap rate "
+            f"when financing is favorable. An {coc_lo:.0f}–{coc_hi:.0f}% CoC is generally considered a strong leveraged return. "
+            "Both metrics are shown below; working backwards from NOI, each row answers: "
+            "\"At what price does this property hit this target?\"",
             s["body"]
         ))
         elems.append(Spacer(1, 8))
@@ -920,110 +944,83 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         LBLUE  = colors.HexColor("#EEF3F8")
         LLBLUE = colors.HexColor("#F7FAFD")
         LPINK  = colors.HexColor("#FFF0F5")
-        GREEN  = colors.HexColor("#2e7d32")
-        RED    = colors.HexColor("#c62828")
+        DHDR   = colors.HexColor("#D8E4F0")
+        PHDR   = colors.HexColor("#FCE4EC")
 
-        # Build table columns — cash columns always present, fin columns if enabled
-        def _fin_row_cells(noi, price, pink=False):
-            """Return (debt_svc, cash_flow, coc) cells, or empty list if no financing."""
-            if not show_fin or price <= 0:
-                return []
-            ads  = _ads_for_price_pdf(price)
-            down = price * (down_pct_v / 100)
-            cf   = noi - ads
-            coc  = (cf / down * 100) if down > 0 else 0.0
-            cf_c = GREEN if cf >= 0 else RED
-            coc_c= GREEN if coc >= 0 else RED
-            base = PINK if pink else NAVY
-            return [
-                _rp(_money(ads), color=DGRAY),
-                _rp(f"<b>{_money(cf)}</b>", bold=True, color=cf_c),
-                _rp(f"<b>{coc:.2f}%</b>", bold=True, color=coc_c),
-            ]
-
-        def _rec_row_pdf(label, price, noi, cap, pink=False):
-            c = PINK if pink else NAVY
+        def _rec_row_pdf(label, price, ret_pct, pink=False):
+            c  = PINK if pink else NAVY
             fn = "Times-Bold" if pink else "Times-Roman"
-            base = [
+            return [
                 Paragraph(label, ParagraphStyle("_rl", fontName=fn, fontSize=9, textColor=c)),
                 _rp(f"<b>{_money(price)}</b>", bold=True, color=c, size=10),
-                _rp(f"{cap:.1f}%", color=c),
+                _rp(f"{ret_pct:.1f}%", color=c),
             ]
-            return base + _fin_row_cells(noi, price, pink=pink)
 
-        # Header
-        fin_hdrs = [
-            _rp(f"<b>Debt Svc/yr</b>", bold=True, color=WHITE, size=8),
-            _rp(f"<b>Cash Flow/yr</b>", bold=True, color=WHITE, size=8),
-            _rp(f"<b>CoC Return</b>",   bold=True, color=WHITE, size=8),
-        ] if show_fin else []
+        def _shdr_row(text, pink=False):
+            c  = PINK if pink else NAVY
+            bg = PHDR  if pink else DHDR
+            fn = "Times-Bold"
+            return ([
+                Paragraph(f"<b>{text}</b>",
+                          ParagraphStyle("_sh", fontName=fn, fontSize=9, textColor=c)),
+                Paragraph("", s["body"]), Paragraph("", s["body"]),
+            ], bg)
 
         rec_rows = [[
             Paragraph("<b>Price Scenario</b>", s["label"]),
             _rp("<b>Implied Price</b>", bold=True, color=WHITE),
-            _rp("<b>Cash Cap Rate</b>", bold=True, color=WHITE),
-        ] + fin_hdrs]
+            _rp("<b>Return %</b>", bold=True, color=WHITE),
+        ]]
+        row_colors = [NAVY]  # track per-row background for custom coloring
 
-        # Section label row — current rents
-        ncols = 6 if show_fin else 3
-        rec_rows.append([
-            Paragraph("<b>💵  Cash Buyer — Current Rents</b>",
-                      ParagraphStyle("_sh", fontName="Times-Bold", fontSize=9, textColor=NAVY)),
-        ] + [Paragraph("", s["body"])] * (ncols - 1))
+        def _add_shdr(text, pink=False):
+            row, bg = _shdr_row(text, pink=pink)
+            rec_rows.append(row)
+            row_colors.append(bg)
 
-        rec_rows.append(_rec_row_pdf(
-            f"{cap_lo:.0f}% cash cap rate — investor ceiling", pr_at_7_cur, noi_cur, cap_lo))
-        rec_rows.append(_rec_row_pdf(
-            f"{cap_hi:.0f}% cash cap rate — strong investor value", pr_at_11_cur, noi_cur, cap_hi))
+        def _add_data(label, price, ret_pct, pink=False):
+            rec_rows.append(_rec_row_pdf(label, price, ret_pct, pink=pink))
+            row_colors.append(LPINK if pink else LBLUE)
+
+        # Cash / cap-rate section
+        _add_shdr(f"💵  Cash Purchase — Cap Rate  ·  Current NOI {_money(noi_cur)}/yr")
+        _add_data(f"{cap_lo:.0f}% cap rate — investor ceiling", pr_at_7_cur, cap_lo)
+        _add_data(f"{cap_hi:.0f}% cap rate — strong investor value", pr_at_11_cur, cap_hi)
 
         if pr_at_7_mkt > 0:
-            rec_rows.append([
-                Paragraph("<b>📈  Cash Buyer — Market Rents (upside)</b>",
-                          ParagraphStyle("_sh2", fontName="Times-Bold", fontSize=9, textColor=PINK)),
-            ] + [Paragraph("", s["body"])] * (ncols - 1))
-            rec_rows.append(_rec_row_pdf(
-                f"{cap_lo:.0f}% cash cap rate at market rents", pr_at_7_mkt, noi_mkt, cap_lo, pink=True))
-            rec_rows.append(_rec_row_pdf(
-                f"{cap_hi:.0f}% cash cap rate at market rents", pr_at_11_mkt, noi_mkt, cap_hi, pink=True))
+            _add_shdr(f"📈  Cash Purchase at Market Rents — NOI {_money(noi_mkt)}/yr", pink=True)
+            _add_data(f"{cap_lo:.0f}% cap rate at market rents", pr_at_7_mkt, cap_lo, pink=True)
+            _add_data(f"{cap_hi:.0f}% cap rate at market rents", pr_at_11_mkt, cap_hi, pink=True)
 
-        # Column widths
-        if show_fin:
-            col_w = [2.4*inch, 1.0*inch, 0.8*inch, 0.8*inch, 0.85*inch, 0.75*inch]
-        else:
-            col_w = [4.0*inch, 1.2*inch, 1.0*inch]
+        # Financed / CoC section
+        if show_fin and pr_coc8_cur > 0:
+            fin_lbl = f"{down_pct_v:.0f}% down @ {rate_v:.2f}% / {term_v} yr"
+            _add_shdr(f"🏦  Financed Buyer — Cash-on-Cash Return  ·  {fin_lbl}")
+            _add_data(f"{coc_lo:.0f}% CoC — solid leveraged return", pr_coc8_cur, coc_lo)
+            _add_data(f"{coc_hi:.0f}% CoC — strong leveraged return", pr_coc12_cur, coc_hi)
+            if pr_coc8_mkt > 0:
+                _add_shdr(f"📈  Financed at Market Rents  ·  {fin_lbl}", pink=True)
+                _add_data(f"{coc_lo:.0f}% CoC at market rents", pr_coc8_mkt, coc_lo, pink=True)
+                _add_data(f"{coc_hi:.0f}% CoC at market rents", pr_coc12_mkt, coc_hi, pink=True)
 
+        col_w = [4.0*inch, 1.2*inch, 1.0*inch]
         rec_tbl = Table(rec_rows, colWidths=col_w)
         rec_style = [
-            ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
-            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [LBLUE, LLBLUE]),
-            ("TOPPADDING",    (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
-            ("BOX",           (0, 0), (-1, -1), 1.5, NAVY),
-            # Section label rows — navy and pink shading
-            ("BACKGROUND",    (0, 1), (-1, 1),  colors.HexColor("#D8E4F0")),
-            ("SPAN",          (0, 1), (-1, 1)),
+            ("BACKGROUND",   (0, 0), (-1, 0), NAVY),
+            ("TOPPADDING",   (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("BOX",          (0, 0), (-1, -1), 1.5, NAVY),
         ]
-        if pr_at_7_mkt > 0:
-            mkt_section_row = 4  # rows: header, cur-label, cur-7, cur-11, mkt-label...
-            rec_style += [
-                ("BACKGROUND", (0, mkt_section_row), (-1, mkt_section_row), colors.HexColor("#FCE4EC")),
-                ("SPAN",       (0, mkt_section_row), (-1, mkt_section_row)),
-                ("BACKGROUND", (0, mkt_section_row+1), (-1, -1), LPINK),
-            ]
+        for i, bg in enumerate(row_colors):
+            rec_style.append(("BACKGROUND", (0, i), (-1, i), bg))
+            # Span section header rows across all columns
+            if i > 0 and bg in (DHDR, PHDR):
+                rec_style.append(("SPAN", (0, i), (-1, i)))
 
         rec_tbl.setStyle(TableStyle(rec_style))
         elems.append(KeepTogether([rec_tbl]))
-
-        if show_fin:
-            elems.append(Spacer(1, 4))
-            elems.append(Paragraph(
-                f"<i>Financing columns assume {down_pct_v:.0f}% down @ {rate_v:.3f}% for {term_v} years. "
-                f"CoC = cash-on-cash return on down payment after debt service. "
-                f"Green = positive cash flow; red = negative.</i>",
-                s["caption"]
-            ))
 
         elems.append(Spacer(1, 6))
         elems.append(Paragraph(
