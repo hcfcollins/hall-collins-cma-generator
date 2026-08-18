@@ -813,8 +813,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         s["caption"]
     ))
 
-    # ── Income-Based Price Recommendation comes first ─────────────────────────
-    # (financing section follows on its own page after)
+    # ── Variable declarations for both income rec and financing ───────────────
     pr_at_7_cur  = subject.get("mf_pr_at_7_cur", 0)
     pr_at_11_cur = subject.get("mf_pr_at_11_cur", 0)
     pr_at_7_mkt  = subject.get("mf_pr_at_7_mkt", 0)
@@ -832,194 +831,6 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     rate_v       = float(subject.get("mf_interest_rate", 7.0))
     term_v       = int(subject.get("mf_loan_term_yrs", 30))
 
-    show_financing = subject.get("mf_show_financing", False)
-    if show_financing:
-        down_pct   = float(subject.get("mf_down_pct", 25.0))
-        rate       = float(subject.get("mf_interest_rate", 7.0))
-        term_yrs   = int(subject.get("mf_loan_term_yrs", 30))
-        down_amt   = subject.get("mf_down_amt", 0)
-        loan_amt   = subject.get("mf_loan_amt", 0)
-        monthly_pmt= subject.get("mf_monthly_payment", 0)
-        annual_ds  = subject.get("mf_annual_debt_service", 0)
-        cf_cur     = subject.get("mf_cf_cur", 0)
-        cf_mkt     = subject.get("mf_cf_mkt", 0)
-        coc_cur    = subject.get("mf_coc_cur", 0)
-        coc_mkt    = subject.get("mf_coc_mkt", 0)
-
-        GREEN = colors.HexColor("#2e7d32")
-        RED   = colors.HexColor("#c62828")
-
-        def _cf_color(val):
-            return GREEN if val >= 0 else RED
-
-        elems.append(PageBreak())
-        elems += _section_header("Financing Scenario Analysis", s)
-
-        # ── CoC blurb — explain the metric BEFORE the table ───────────────
-        _fin_blurb_style = ParagraphStyle(
-            "_finblurb", fontName="Times-Roman", fontSize=11, textColor=colors.HexColor("#222222"),
-            leading=16, leftIndent=8, rightIndent=8, spaceAfter=8,
-            backColor=colors.HexColor("#EEF3F8"), borderPadding=(8, 12, 8, 12),
-        )
-        elems.append(Paragraph(
-            f"<b>Cash-on-Cash Return (CoC)</b> answers the question an investor with a mortgage "
-            f"actually cares about: after making the down payment and covering the mortgage every month, "
-            f"how much cash is left over — and what return does that represent on the money I put in? "
-            f"This scenario assumes <b>{down_pct:.0f}% down at {rate:.3f}% interest over {term_yrs} years</b>. "
-            f"An 8–12% CoC is generally considered a strong leveraged return in this market.",
-            _fin_blurb_style
-        ))
-        elems.append(Spacer(1, 8))
-        elems.append(Paragraph(
-            f"FINANCING SCENARIO — {down_pct:.0f}% Down @ {rate:.3f}% Interest, {term_yrs}-Year Term",
-            ParagraphStyle("fin_hdr", fontName="Times-Bold", fontSize=11,
-                           textColor=NAVY, spaceAfter=4)
-        ))
-
-        # Financing summary table
-        if has_market:
-            fin_col_w = [2.9*inch, 1.7*inch, 1.7*inch]
-            fin_header = [
-                Paragraph("<b>Item</b>", s["label"]),
-                _rp("<b>Current Rents</b>", bold=True, color=WHITE),
-                _rp("<b>Market Rents</b>", bold=True, color=WHITE),
-            ]
-            def _fin_row(label, cur_val, mkt_val, bold=False, cur_color=DGRAY, mkt_color=None):
-                mkt_color = mkt_color or cur_color
-                return [
-                    Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
-                    _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold, color=cur_color),
-                    _rp(f"<b>{mkt_val}</b>" if bold else mkt_val, bold=bold, color=mkt_color),
-                ]
-        else:
-            fin_col_w = [3.5*inch, 2.5*inch]
-            fin_header = [
-                Paragraph("<b>Item</b>", s["label"]),
-                _rp("<b>Amount</b>", bold=True, color=WHITE),
-            ]
-            def _fin_row(label, cur_val, mkt_val=None, bold=False, cur_color=DGRAY, mkt_color=None):
-                return [
-                    Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
-                    _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold, color=cur_color),
-                ]
-
-        fin_data = [
-            fin_header,
-            _fin_row("Purchase Price",       _money(price_rec),  _money(price_rec)),
-            _fin_row(f"Down Payment ({down_pct:.0f}%)", _money(down_amt), _money(down_amt)),
-            _fin_row("Loan Amount",          _money(loan_amt),   _money(loan_amt),  bold=True, cur_color=NAVY),
-            _fin_row(f"Monthly Payment ({rate:.3f}%, {term_yrs} yrs)",
-                                             _money(monthly_pmt), _money(monthly_pmt)),
-            _fin_row("Annual Debt Service",  f"({_money(annual_ds)})", f"({_money(annual_ds)})",
-                     bold=True, cur_color=NAVY),
-            _fin_row("NOI",                  _money(noi_cur),    _money(noi_mkt),
-                     cur_color=NAVY, mkt_color=PINK if has_market else NAVY),
-            _fin_row("Cash Flow After Financing",
-                     _money(cf_cur), _money(cf_mkt),
-                     bold=True,
-                     cur_color=_cf_color(cf_cur),
-                     mkt_color=_cf_color(cf_mkt)),
-            _fin_row(f"Cash-on-Cash Return (on {_money(down_amt)} down)",
-                     f"{coc_cur:.2f}%", f"{coc_mkt:.2f}%",
-                     bold=True,
-                     cur_color=_cf_color(coc_cur),
-                     mkt_color=_cf_color(coc_mkt)),
-        ]
-
-        # Add 8% CoC floor row if available
-        _coc8_floor = subject.get("mf_pr_coc8_cur", 0)
-        _coc8_floor_mkt_fin = subject.get("mf_pr_coc8_mkt", 0)
-        if _coc8_floor > 0:
-            AMBER = colors.HexColor("#FFF8E1")
-            AMBER_BORDER = colors.HexColor("#F9A825")
-            if has_market and _coc8_floor_mkt_fin > 0:
-                fin_data.append([
-                    Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
-                    _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
-                    _rp(f"<b>{_money(_coc8_floor_mkt_fin)}</b>", bold=True, color=colors.HexColor("#E65100")),
-                ])
-            else:
-                if has_market:
-                    fin_data.append([
-                        Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
-                        _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
-                        _rp("—", bold=False, color=DGRAY),
-                    ])
-                else:
-                    fin_data.append([
-                        Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
-                        _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
-                    ])
-            _has_coc8_row = True
-        else:
-            _has_coc8_row = False
-
-        fin_tbl = Table(fin_data, colWidths=fin_col_w)
-        if _has_coc8_row:
-            fin_style = [
-                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
-                ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
-                ("ROWBACKGROUNDS",(0, 1), (-1, -4), [WHITE, LGRAY]),
-                ("BACKGROUND",    (0, -3), (-1, -2), BLUSH),
-                ("LINEABOVE",     (0, -3), (-1, -3), 1.5, NAVY),
-                ("BACKGROUND",    (0, -1), (-1, -1), colors.HexColor("#FFF3E0")),
-                ("LINEABOVE",     (0, -1), (-1, -1), 1.5, colors.HexColor("#F9A825")),
-                ("TOPPADDING",    (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-            ]
-            if has_market:
-                fin_style += [
-                    ("BACKGROUND", (2, 1), (2, -4), colors.HexColor("#FFF0F5")),
-                    ("BACKGROUND", (2, -3), (2, -2), colors.HexColor("#FCE4EC")),
-                    ("BACKGROUND", (2, -1), (2, -1), colors.HexColor("#FFF3E0")),
-                ]
-        else:
-            fin_style = [
-                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
-                ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
-                ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
-                ("BACKGROUND",    (0, -2), (-1, -1), BLUSH),
-                ("LINEABOVE",     (0, -2), (-1, -2), 1.5, NAVY),
-                ("TOPPADDING",    (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-            ]
-            if has_market:
-                fin_style += [
-                    ("BACKGROUND", (2, 1), (2, -3), colors.HexColor("#FFF0F5")),
-                    ("BACKGROUND", (2, -2), (2, -1), colors.HexColor("#FCE4EC")),
-                ]
-        fin_tbl.setStyle(TableStyle(fin_style))
-        elems.append(fin_tbl)
-        elems.append(Spacer(1, 10))
-
-        # ── Bank financing callout note ────────────────────────────────────
-        note_tbl = Table(
-            [[Paragraph(
-                "<b>Important Note on Bank Financing</b><br/>"
-                "Commercial lenders typically require <b>a minimum of two years of documented "
-                "operating history</b> (rent rolls, tax returns, profit &amp; loss statements) "
-                "before approving a loan on a multi-family investment property. "
-                "A buyer without that track record will likely need to purchase in cash or "
-                "through a private/bridge lender at a higher rate until that history is established. "
-                "This financing scenario is illustrative and assumes the buyer qualifies for "
-                f"conventional commercial financing at {rate:.3f}%.",
-                s["body"]
-            )]],
-            colWidths=[6.0*inch]
-        )
-        note_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#FFF8E1")),
-            ("BOX",           (0, 0), (-1, -1), 1.5, colors.HexColor("#F9A825")),
-            ("TOPPADDING",    (0, 0), (-1, -1), 10),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
-        ]))
-        elems.append(KeepTogether([note_tbl]))
 
     # ── Income-Based Price Recommendation ────────────────────────────────────
 
@@ -1238,6 +1049,194 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             s["caption"]
         ))
 
+    # ── Financing Scenario Analysis ───────────────────────────────────────────
+
+    show_financing = subject.get("mf_show_financing", False)
+    if show_financing:
+        down_pct   = float(subject.get("mf_down_pct", 25.0))
+        rate       = float(subject.get("mf_interest_rate", 7.0))
+        term_yrs   = int(subject.get("mf_loan_term_yrs", 30))
+        down_amt   = subject.get("mf_down_amt", 0)
+        loan_amt   = subject.get("mf_loan_amt", 0)
+        monthly_pmt= subject.get("mf_monthly_payment", 0)
+        annual_ds  = subject.get("mf_annual_debt_service", 0)
+        cf_cur     = subject.get("mf_cf_cur", 0)
+        cf_mkt     = subject.get("mf_cf_mkt", 0)
+        coc_cur    = subject.get("mf_coc_cur", 0)
+        coc_mkt    = subject.get("mf_coc_mkt", 0)
+
+        GREEN = colors.HexColor("#2e7d32")
+        RED   = colors.HexColor("#c62828")
+
+        def _cf_color(val):
+            return GREEN if val >= 0 else RED
+
+        elems.append(PageBreak())
+        elems += _section_header("Financing Scenario Analysis", s)
+
+        # ── CoC blurb — explain the metric BEFORE the table ───────────────
+        _fin_blurb_style = ParagraphStyle(
+            "_finblurb", fontName="Times-Roman", fontSize=11, textColor=colors.HexColor("#222222"),
+            leading=16, leftIndent=8, rightIndent=8, spaceAfter=8,
+            backColor=colors.HexColor("#EEF3F8"), borderPadding=(8, 12, 8, 12),
+        )
+        elems.append(Paragraph(
+            f"<b>Cash-on-Cash Return (CoC)</b> answers the question an investor with a mortgage "
+            f"actually cares about: after making the down payment and covering the mortgage every month, "
+            f"how much cash is left over — and what return does that represent on the money I put in? "
+            f"This scenario assumes <b>{down_pct:.0f}% down at {rate:.3f}% interest over {term_yrs} years</b>. "
+            f"An 8–12% CoC is generally considered a strong leveraged return in this market.",
+            _fin_blurb_style
+        ))
+        elems.append(Spacer(1, 8))
+        elems.append(Paragraph(
+            f"FINANCING SCENARIO — {down_pct:.0f}% Down @ {rate:.3f}% Interest, {term_yrs}-Year Term",
+            ParagraphStyle("fin_hdr", fontName="Times-Bold", fontSize=11,
+                           textColor=NAVY, spaceAfter=4)
+        ))
+
+        # Financing summary table
+        if has_market:
+            fin_col_w = [2.9*inch, 1.7*inch, 1.7*inch]
+            fin_header = [
+                Paragraph("<b>Item</b>", s["label"]),
+                _rp("<b>Current Rents</b>", bold=True, color=WHITE),
+                _rp("<b>Market Rents</b>", bold=True, color=WHITE),
+            ]
+            def _fin_row(label, cur_val, mkt_val, bold=False, cur_color=DGRAY, mkt_color=None):
+                mkt_color = mkt_color or cur_color
+                return [
+                    Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+                    _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold, color=cur_color),
+                    _rp(f"<b>{mkt_val}</b>" if bold else mkt_val, bold=bold, color=mkt_color),
+                ]
+        else:
+            fin_col_w = [3.5*inch, 2.5*inch]
+            fin_header = [
+                Paragraph("<b>Item</b>", s["label"]),
+                _rp("<b>Amount</b>", bold=True, color=WHITE),
+            ]
+            def _fin_row(label, cur_val, mkt_val=None, bold=False, cur_color=DGRAY, mkt_color=None):
+                return [
+                    Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+                    _rp(f"<b>{cur_val}</b>" if bold else cur_val, bold=bold, color=cur_color),
+                ]
+
+        fin_data = [
+            fin_header,
+            _fin_row("Purchase Price",       _money(price_rec),  _money(price_rec)),
+            _fin_row(f"Down Payment ({down_pct:.0f}%)", _money(down_amt), _money(down_amt)),
+            _fin_row("Loan Amount",          _money(loan_amt),   _money(loan_amt),  bold=True, cur_color=NAVY),
+            _fin_row(f"Monthly Payment ({rate:.3f}%, {term_yrs} yrs)",
+                                             _money(monthly_pmt), _money(monthly_pmt)),
+            _fin_row("Annual Debt Service",  f"({_money(annual_ds)})", f"({_money(annual_ds)})",
+                     bold=True, cur_color=NAVY),
+            _fin_row("NOI",                  _money(noi_cur),    _money(noi_mkt),
+                     cur_color=NAVY, mkt_color=PINK if has_market else NAVY),
+            _fin_row("Cash Flow After Financing",
+                     _money(cf_cur), _money(cf_mkt),
+                     bold=True,
+                     cur_color=_cf_color(cf_cur),
+                     mkt_color=_cf_color(cf_mkt)),
+            _fin_row(f"Cash-on-Cash Return (on {_money(down_amt)} down)",
+                     f"{coc_cur:.2f}%", f"{coc_mkt:.2f}%",
+                     bold=True,
+                     cur_color=_cf_color(coc_cur),
+                     mkt_color=_cf_color(coc_mkt)),
+        ]
+
+        # Add 8% CoC floor row if available
+        _coc8_floor = subject.get("mf_pr_coc8_cur", 0)
+        _coc8_floor_mkt_fin = subject.get("mf_pr_coc8_mkt", 0)
+        if _coc8_floor > 0:
+            if has_market and _coc8_floor_mkt_fin > 0:
+                fin_data.append([
+                    Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
+                    _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                    _rp(f"<b>{_money(_coc8_floor_mkt_fin)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                ])
+            else:
+                if has_market:
+                    fin_data.append([
+                        Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
+                        _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                        _rp("—", bold=False, color=DGRAY),
+                    ])
+                else:
+                    fin_data.append([
+                        Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
+                        _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                    ])
+            _has_coc8_row = True
+        else:
+            _has_coc8_row = False
+
+        fin_tbl = Table(fin_data, colWidths=fin_col_w)
+        if _has_coc8_row:
+            fin_style = [
+                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+                ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
+                ("ROWBACKGROUNDS",(0, 1), (-1, -4), [WHITE, LGRAY]),
+                ("BACKGROUND",    (0, -3), (-1, -2), BLUSH),
+                ("LINEABOVE",     (0, -3), (-1, -3), 1.5, NAVY),
+                ("BACKGROUND",    (0, -1), (-1, -1), colors.HexColor("#FFF3E0")),
+                ("LINEABOVE",     (0, -1), (-1, -1), 1.5, colors.HexColor("#F9A825")),
+                ("TOPPADDING",    (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ]
+            if has_market:
+                fin_style += [
+                    ("BACKGROUND", (2, 1), (2, -4), colors.HexColor("#FFF0F5")),
+                    ("BACKGROUND", (2, -3), (2, -2), colors.HexColor("#FCE4EC")),
+                    ("BACKGROUND", (2, -1), (2, -1), colors.HexColor("#FFF3E0")),
+                ]
+        else:
+            fin_style = [
+                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+                ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
+                ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
+                ("BACKGROUND",    (0, -2), (-1, -1), BLUSH),
+                ("LINEABOVE",     (0, -2), (-1, -2), 1.5, NAVY),
+                ("TOPPADDING",    (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ]
+            if has_market:
+                fin_style += [
+                    ("BACKGROUND", (2, 1), (2, -3), colors.HexColor("#FFF0F5")),
+                    ("BACKGROUND", (2, -2), (2, -1), colors.HexColor("#FCE4EC")),
+                ]
+        fin_tbl.setStyle(TableStyle(fin_style))
+        elems.append(fin_tbl)
+        elems.append(Spacer(1, 10))
+
+        # ── Bank financing callout note ────────────────────────────────────
+        note_tbl = Table(
+            [[Paragraph(
+                "<b>Important Note on Bank Financing</b><br/>"
+                "Commercial lenders typically require <b>a minimum of two years of documented "
+                "operating history</b> (rent rolls, tax returns, profit &amp; loss statements) "
+                "before approving a loan on a multi-family investment property. "
+                "A buyer without that track record will likely need to purchase in cash or "
+                "through a private/bridge lender at a higher rate until that history is established. "
+                "This financing scenario is illustrative and assumes the buyer qualifies for "
+                f"conventional commercial financing at {rate:.3f}%.",
+                s["body"]
+            )]],
+            colWidths=[6.0*inch]
+        )
+        note_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#FFF8E1")),
+            ("BOX",           (0, 0), (-1, -1), 1.5, colors.HexColor("#F9A825")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+        ]))
+        elems.append(KeepTogether([note_tbl]))
 
     return elems
 
