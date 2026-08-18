@@ -926,23 +926,72 @@ def _build_cap_rate_analysis(subject, price_rec, s):
                      mkt_color=_cf_color(coc_mkt)),
         ]
 
+        # Add 8% CoC floor row if available
+        _coc8_floor = subject.get("mf_pr_coc8_cur", 0)
+        _coc8_floor_mkt_fin = subject.get("mf_pr_coc8_mkt", 0)
+        if _coc8_floor > 0:
+            AMBER = colors.HexColor("#FFF8E1")
+            AMBER_BORDER = colors.HexColor("#F9A825")
+            if has_market and _coc8_floor_mkt_fin > 0:
+                fin_data.append([
+                    Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
+                    _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                    _rp(f"<b>{_money(_coc8_floor_mkt_fin)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                ])
+            else:
+                if has_market:
+                    fin_data.append([
+                        Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
+                        _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                        _rp("—", bold=False, color=DGRAY),
+                    ])
+                else:
+                    fin_data.append([
+                        Paragraph(f"<b>Price needed for minimum {coc_lo:.0f}% CoC</b>", s["body"]),
+                        _rp(f"<b>{_money(_coc8_floor)}</b>", bold=True, color=colors.HexColor("#E65100")),
+                    ])
+            _has_coc8_row = True
+        else:
+            _has_coc8_row = False
+
         fin_tbl = Table(fin_data, colWidths=fin_col_w)
-        fin_style = [
-            ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
-            ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
-            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
-            ("BACKGROUND",    (0, -2), (-1, -1), BLUSH),
-            ("LINEABOVE",     (0, -2), (-1, -2), 1.5, NAVY),
-            ("TOPPADDING",    (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-        ]
-        if has_market:
-            fin_style += [
-                ("BACKGROUND", (2, 1), (2, -3), colors.HexColor("#FFF0F5")),
-                ("BACKGROUND", (2, -2), (2, -1), colors.HexColor("#FCE4EC")),
+        if _has_coc8_row:
+            fin_style = [
+                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+                ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
+                ("ROWBACKGROUNDS",(0, 1), (-1, -4), [WHITE, LGRAY]),
+                ("BACKGROUND",    (0, -3), (-1, -2), BLUSH),
+                ("LINEABOVE",     (0, -3), (-1, -3), 1.5, NAVY),
+                ("BACKGROUND",    (0, -1), (-1, -1), colors.HexColor("#FFF3E0")),
+                ("LINEABOVE",     (0, -1), (-1, -1), 1.5, colors.HexColor("#F9A825")),
+                ("TOPPADDING",    (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
             ]
+            if has_market:
+                fin_style += [
+                    ("BACKGROUND", (2, 1), (2, -4), colors.HexColor("#FFF0F5")),
+                    ("BACKGROUND", (2, -3), (2, -2), colors.HexColor("#FCE4EC")),
+                    ("BACKGROUND", (2, -1), (2, -1), colors.HexColor("#FFF3E0")),
+                ]
+        else:
+            fin_style = [
+                ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+                ("TEXTCOLOR",     (0, 0), (-1, 0),  WHITE),
+                ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
+                ("BACKGROUND",    (0, -2), (-1, -1), BLUSH),
+                ("LINEABOVE",     (0, -2), (-1, -2), 1.5, NAVY),
+                ("TOPPADDING",    (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ]
+            if has_market:
+                fin_style += [
+                    ("BACKGROUND", (2, 1), (2, -3), colors.HexColor("#FFF0F5")),
+                    ("BACKGROUND", (2, -2), (2, -1), colors.HexColor("#FCE4EC")),
+                ]
         fin_tbl.setStyle(TableStyle(fin_style))
         elems.append(fin_tbl)
         elems.append(Spacer(1, 10))
@@ -987,9 +1036,9 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         BLURB  = colors.HexColor("#EEF3F8")
 
         _blurb_style = ParagraphStyle(
-            "_blurb", fontName="Times-Roman", fontSize=11, textColor=colors.HexColor("#222222"),
-            leading=16, leftIndent=8, rightIndent=8, spaceAfter=6,
-            backColor=BLURB, borderPadding=(8, 12, 8, 12),
+            "_blurb", fontName="Times-Roman", fontSize=9.5, textColor=colors.HexColor("#222222"),
+            leading=13, leftIndent=8, rightIndent=8, spaceAfter=6,
+            backColor=BLURB, borderPadding=(6, 10, 6, 10),
         )
 
         def _rec_row_pdf(label, price, ret_pct, pink=False):
