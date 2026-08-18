@@ -373,6 +373,28 @@ def _build_research_notes(subject, recommendations, s):
             "A fresh coat of neutral paint is one of the highest-return investments before "
             "listing. Address any visible deferred maintenance — peeling paint, cracked trim, "
             "or incomplete renovations — prior to going to market."),
+        "organize_leases": ("Organize Leases & Tenant Documents",
+            "Buyers and their attorneys will want to review all existing leases, rent rolls, "
+            "and any written agreements with tenants before closing. We recommend gathering "
+            "all signed lease agreements, security deposit records, and any written notices "
+            "into a single folder now. Being organized and transparent with this documentation "
+            "builds buyer confidence, speeds up due diligence, and can prevent deal-killing "
+            "surprises during the contract period."),
+        "evict_tenants": ("Consider Evicting Problem Tenants",
+            "Problem tenants — those with a history of late payments, lease violations, or "
+            "ongoing disputes — can significantly reduce the pool of qualified buyers and "
+            "lower the price a buyer is willing to pay. A property with stable, paying tenants "
+            "in place is far more attractive than one carrying known tenancy issues into a sale. "
+            "We recommend consulting with a local attorney about your options before listing. "
+            "In many cases, addressing tenancy issues in advance results in a faster, higher-value sale."),
+        "system_repairs": ("Make Repairs to Major Systems",
+            "Buyers of investment properties pay close attention to the condition and age of "
+            "major systems — heating, plumbing, electrical, and roofing. Known deferred "
+            "maintenance on these items will be flagged in inspections and used as negotiating "
+            "leverage. We recommend addressing any urgent repairs — particularly to heating "
+            "systems, water heaters, and roofing — before listing. Even partial repairs or "
+            "documented service records go a long way toward supporting your asking price and "
+            "reducing buyer hesitation."),
     }
 
     if recommendations:
@@ -620,8 +642,8 @@ def _build_cap_rate_analysis(subject, price_rec, s):
 
         # ── Included-in-rent utilities ────────────────────────────────────
         _util_icons = {
-            "Electric": "⚡ Electric", "Heat": "🔥 Heat", "Plowing": "❄️ Plowing",
-            "Mowing": "🌿 Mowing", "Trash": "🗑️ Trash", "Internet": "📶 Internet",
+            "Electric": "Electric", "Heat": "Heat", "Plowing": "Plowing",
+            "Mowing": "Mowing", "Trash": "Trash", "Internet": "Internet",
         }
         _included = subject.get("mf_included_utilities", [])
         if _included:
@@ -888,7 +910,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         # ── Bank financing callout note ────────────────────────────────────
         note_tbl = Table(
             [[Paragraph(
-                "<b>⚠️  Important Note on Bank Financing</b><br/>"
+                "<b>Important Note on Bank Financing</b><br/>"
                 "Commercial lenders typically require <b>a minimum of two years of documented "
                 "operating history</b> (rent rolls, tax returns, profit &amp; loss statements) "
                 "before approving a loan on a multi-family investment property. "
@@ -936,25 +958,20 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             ParagraphStyle("rec_hdr", fontName="Times-Bold", fontSize=11,
                            textColor=NAVY, spaceAfter=4)
         ))
-        elems.append(Paragraph(
-            "<b>Cap Rate</b> measures return on an <i>all-cash</i> purchase — NOI ÷ Price. "
-            "No mortgage, no leverage — just pure income return. "
-            "A 7% cap rate means the property generates 7¢ of income for every $1 paid. "
-            f"Investors targeting a {cap_lo:.0f}–{cap_hi:.0f}% cap rate are typical in Northern New England multi-family.  "
-            "<b>Cash-on-Cash Return (CoC)</b> measures return on the <i>actual cash invested</i> — "
-            "the down payment — after paying the mortgage. Because of leverage, CoC can exceed the cap rate "
-            f"when financing is favorable. An {coc_lo:.0f}–{coc_hi:.0f}% CoC is generally considered a strong leveraged return. "
-            "Both metrics are shown below; working backwards from NOI, each row answers: "
-            "\"At what price does this property hit this target?\"",
-            s["body"]
-        ))
-        elems.append(Spacer(1, 8))
+        elems.append(Spacer(1, 6))
 
         LBLUE  = colors.HexColor("#EEF3F8")
         LLBLUE = colors.HexColor("#F7FAFD")
         LPINK  = colors.HexColor("#FFF0F5")
         DHDR   = colors.HexColor("#D8E4F0")
         PHDR   = colors.HexColor("#FCE4EC")
+        BLURB  = colors.HexColor("#EEF3F8")
+
+        _blurb_style = ParagraphStyle(
+            "_blurb", fontName="Times-Roman", fontSize=9, textColor=colors.HexColor("#333333"),
+            leading=13, leftIndent=6, rightIndent=6, spaceAfter=4,
+            backColor=BLURB, borderPadding=(5, 8, 5, 8),
+        )
 
         def _rec_row_pdf(label, price, ret_pct, pink=False):
             c  = PINK if pink else NAVY
@@ -968,10 +985,9 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         def _shdr_row(text, pink=False):
             c  = PINK if pink else NAVY
             bg = PHDR  if pink else DHDR
-            fn = "Times-Bold"
             return ([
                 Paragraph(f"<b>{text}</b>",
-                          ParagraphStyle("_sh", fontName=fn, fontSize=9, textColor=c)),
+                          ParagraphStyle("_sh", fontName="Times-Bold", fontSize=9, textColor=c)),
                 Paragraph("", s["body"]), Paragraph("", s["body"]),
             ], bg)
 
@@ -980,7 +996,7 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             _rp("<b>Implied Price</b>", bold=True, color=WHITE),
             _rp("<b>Return %</b>", bold=True, color=WHITE),
         ]]
-        row_colors = [NAVY]  # track per-row background for custom coloring
+        row_colors = [NAVY]
 
         def _add_shdr(text, pink=False):
             row, bg = _shdr_row(text, pink=pink)
@@ -991,45 +1007,111 @@ def _build_cap_rate_analysis(subject, price_rec, s):
             rec_rows.append(_rec_row_pdf(label, price, ret_pct, pink=pink))
             row_colors.append(LPINK if pink else LBLUE)
 
-        # Cash / cap-rate section
-        _add_shdr(f"💵  Cash Purchase — Cap Rate  ·  Current NOI {_money(noi_cur)}/yr")
+        # ── Cap Rate blurb + rows ──────────────────────────────────────────
+        elems.append(Paragraph(
+            "<b>Cap Rate</b> — return on an all-cash purchase (NOI \u00f7 Price, no debt). "
+            "A 7% cap rate means the property generates <b>$7 of annual income for every $100 of purchase price</b>. "
+            f"Investors targeting {cap_lo:.0f}\u2013{cap_hi:.0f}% are typical in Northern New England multi-family.",
+            _blurb_style
+        ))
+        elems.append(Spacer(1, 4))
+
+        _add_shdr(f"Cash Purchase — Cap Rate  |  Current NOI {_money(noi_cur)}/yr")
         _add_data(f"{cap_lo:.0f}% cap rate — investor ceiling", pr_at_7_cur, cap_lo)
         _add_data(f"{cap_hi:.0f}% cap rate — strong investor value", pr_at_11_cur, cap_hi)
 
         if pr_at_7_mkt > 0:
-            _add_shdr(f"📈  Cash Purchase at Market Rents — NOI {_money(noi_mkt)}/yr", pink=True)
+            _add_shdr(f"Cash Purchase at Market Rents — NOI {_money(noi_mkt)}/yr", pink=True)
             _add_data(f"{cap_lo:.0f}% cap rate at market rents", pr_at_7_mkt, cap_lo, pink=True)
             _add_data(f"{cap_hi:.0f}% cap rate at market rents", pr_at_11_mkt, cap_hi, pink=True)
 
-        # Financed / CoC section
+        # ── CoC blurb + rows (only when financing entered) ────────────────
         if show_fin and pr_coc8_cur > 0:
+            # Render the cap-rate table first, then the CoC blurb + its own table
+            col_w = [4.0*inch, 1.2*inch, 1.0*inch]
+            rec_tbl = Table(rec_rows, colWidths=col_w)
+            rec_style = [
+                ("BACKGROUND",   (0, 0), (-1, 0), NAVY),
+                ("TOPPADDING",   (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("BOX",          (0, 0), (-1, -1), 1.5, NAVY),
+            ]
+            for i, bg in enumerate(row_colors):
+                rec_style.append(("BACKGROUND", (0, i), (-1, i), bg))
+                if i > 0 and bg in (DHDR, PHDR):
+                    rec_style.append(("SPAN", (0, i), (-1, i)))
+            rec_tbl.setStyle(TableStyle(rec_style))
+            elems.append(KeepTogether([rec_tbl]))
+            elems.append(Spacer(1, 10))
+
             fin_lbl = f"{down_pct_v:.0f}% down @ {rate_v:.2f}% / {term_v} yr"
-            _add_shdr(f"🏦  Financed Buyer — Cash-on-Cash Return  ·  {fin_lbl}")
-            _add_data(f"{coc_lo:.0f}% CoC — solid leveraged return", pr_coc8_cur, coc_lo)
-            _add_data(f"{coc_hi:.0f}% CoC — strong leveraged return", pr_coc12_cur, coc_hi)
+            elems.append(Paragraph(
+                f"<b>Cash-on-Cash Return (CoC)</b> — return on just the down payment ({fin_lbl}) "
+                "after paying the mortgage. Because of leverage, CoC can be higher than the cap rate. "
+                f"An {coc_lo:.0f}\u2013{coc_hi:.0f}% CoC is generally considered a strong leveraged return.",
+                _blurb_style
+            ))
+            elems.append(Spacer(1, 4))
+
+            coc_rows = [[
+                Paragraph("<b>Price Scenario</b>", s["label"]),
+                _rp("<b>Implied Price</b>", bold=True, color=WHITE),
+                _rp("<b>Return %</b>", bold=True, color=WHITE),
+            ]]
+            coc_colors = [NAVY]
+
+            def _add_coc_shdr(text, pink=False):
+                row, bg = _shdr_row(text, pink=pink)
+                coc_rows.append(row)
+                coc_colors.append(bg)
+
+            def _add_coc_data(label, price, ret_pct, pink=False):
+                coc_rows.append(_rec_row_pdf(label, price, ret_pct, pink=pink))
+                coc_colors.append(LPINK if pink else LBLUE)
+
+            _add_coc_shdr(f"Financed Buyer — Cash-on-Cash Return  |  {fin_lbl}")
+            _add_coc_data(f"{coc_lo:.0f}% CoC — solid leveraged return", pr_coc8_cur, coc_lo)
+            _add_coc_data(f"{coc_hi:.0f}% CoC — strong leveraged return", pr_coc12_cur, coc_hi)
             if pr_coc8_mkt > 0:
-                _add_shdr(f"📈  Financed at Market Rents  ·  {fin_lbl}", pink=True)
-                _add_data(f"{coc_lo:.0f}% CoC at market rents", pr_coc8_mkt, coc_lo, pink=True)
-                _add_data(f"{coc_hi:.0f}% CoC at market rents", pr_coc12_mkt, coc_hi, pink=True)
+                _add_coc_shdr(f"Financed at Market Rents  |  {fin_lbl}", pink=True)
+                _add_coc_data(f"{coc_lo:.0f}% CoC at market rents", pr_coc8_mkt, coc_lo, pink=True)
+                _add_coc_data(f"{coc_hi:.0f}% CoC at market rents", pr_coc12_mkt, coc_hi, pink=True)
 
-        col_w = [4.0*inch, 1.2*inch, 1.0*inch]
-        rec_tbl = Table(rec_rows, colWidths=col_w)
-        rec_style = [
-            ("BACKGROUND",   (0, 0), (-1, 0), NAVY),
-            ("TOPPADDING",   (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("BOX",          (0, 0), (-1, -1), 1.5, NAVY),
-        ]
-        for i, bg in enumerate(row_colors):
-            rec_style.append(("BACKGROUND", (0, i), (-1, i), bg))
-            # Span section header rows across all columns
-            if i > 0 and bg in (DHDR, PHDR):
-                rec_style.append(("SPAN", (0, i), (-1, i)))
-
-        rec_tbl.setStyle(TableStyle(rec_style))
-        elems.append(KeepTogether([rec_tbl]))
+            coc_tbl = Table(coc_rows, colWidths=col_w)
+            coc_style = [
+                ("BACKGROUND",   (0, 0), (-1, 0), NAVY),
+                ("TOPPADDING",   (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("BOX",          (0, 0), (-1, -1), 1.5, NAVY),
+            ]
+            for i, bg in enumerate(coc_colors):
+                coc_style.append(("BACKGROUND", (0, i), (-1, i), bg))
+                if i > 0 and bg in (DHDR, PHDR):
+                    coc_style.append(("SPAN", (0, i), (-1, i)))
+            coc_tbl.setStyle(TableStyle(coc_style))
+            elems.append(KeepTogether([coc_tbl]))
+        else:
+            # No financing — render the single cap-rate table
+            col_w = [4.0*inch, 1.2*inch, 1.0*inch]
+            rec_tbl = Table(rec_rows, colWidths=col_w)
+            rec_style = [
+                ("BACKGROUND",   (0, 0), (-1, 0), NAVY),
+                ("TOPPADDING",   (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("BOX",          (0, 0), (-1, -1), 1.5, NAVY),
+            ]
+            for i, bg in enumerate(row_colors):
+                rec_style.append(("BACKGROUND", (0, i), (-1, i), bg))
+                if i > 0 and bg in (DHDR, PHDR):
+                    rec_style.append(("SPAN", (0, i), (-1, i)))
+            rec_tbl.setStyle(TableStyle(rec_style))
+            elems.append(KeepTogether([rec_tbl]))
 
         elems.append(Spacer(1, 6))
         elems.append(Paragraph(

@@ -139,13 +139,16 @@ def _session_to_dict():
         "price_notes": st.session_state.get("price_notes", ""),
         "agent_notes": st.session_state.get("agent_notes", ""),
         "recommendations": {
-            "rec_spring":      st.session_state.get("rec_spring", False),
-            "rec_septic":      st.session_state.get("rec_septic", False),
-            "rec_home_insp":   st.session_state.get("rec_home_insp", False),
-            "rec_staging":     st.session_state.get("rec_staging", False),
-            "rec_clean":       st.session_state.get("rec_clean", False),
-            "rec_subdivision": st.session_state.get("rec_subdivision", False),
-            "rec_painting":    st.session_state.get("rec_painting", False),
+            "rec_spring":          st.session_state.get("rec_spring", False),
+            "rec_septic":          st.session_state.get("rec_septic", False),
+            "rec_home_insp":       st.session_state.get("rec_home_insp", False),
+            "rec_staging":         st.session_state.get("rec_staging", False),
+            "rec_clean":           st.session_state.get("rec_clean", False),
+            "rec_subdivision":     st.session_state.get("rec_subdivision", False),
+            "rec_painting":        st.session_state.get("rec_painting", False),
+            "rec_organize_leases": st.session_state.get("rec_organize_leases", False),
+            "rec_evict_tenants":   st.session_state.get("rec_evict_tenants", False),
+            "rec_system_repairs":  st.session_state.get("rec_system_repairs", False),
         },
         # multi-family income fields are stored inside subject_data["mf_*"]
     }
@@ -874,19 +877,32 @@ if _prop_type_now == "Multi Family":
 
         _coc_col_note = f" &nbsp;·&nbsp; <em>CoC assumes {_down_pct:.0f}% down @ {_rate_annual:.2f}%</em>" if _show_financing else ""
 
+        _cap_rate_blurb = """
+            <tr><td colspan="3" style="padding:8px 8px 6px;">
+              <div style="font-family:Georgia;font-size:0.82rem;color:#444;line-height:1.5;
+                          padding:8px 12px;background:#EEF3F8;border-left:3px solid #173348;border-radius:3px;">
+                <strong>Cap Rate</strong> — return on an all-cash purchase (NOI &divide; Price, no debt).
+                A 7% cap rate means the property generates <strong>$7 of annual income for every $100 of purchase price</strong>.
+                Investors targeting 7–11% are typical in Northern New England multi-family.
+              </div>
+            </td></tr>"""
+
+        _coc_blurb = f"""
+            <tr><td colspan="3" style="padding:8px 8px 6px;">
+              <div style="font-family:Georgia;font-size:0.82rem;color:#444;line-height:1.5;
+                          padding:8px 12px;background:#EEF3F8;border-left:3px solid #173348;border-radius:3px;">
+                <strong>Cash-on-Cash Return (CoC)</strong> — return on just the <em>down payment</em>
+                after paying the mortgage ({_down_pct:.0f}% down @ {_rate_annual:.2f}%).
+                Because of leverage, CoC can be higher than the cap rate.
+                An 8–12% CoC is generally considered a strong leveraged return.
+              </div>
+            </td></tr>""" if _show_financing and _pr_coc8_cur > 0 else ""
+
         st.markdown(
             f"""
             <div style="background:#F0F7FF;border:2px solid #173348;border-radius:8px;padding:14px 20px;margin-top:12px;">
             <div style="font-family:Georgia;color:#173348;font-size:1rem;font-weight:700;margin-bottom:8px;">
               💡 Income-Based Price Recommendation
-            </div>
-            <div style="font-family:Georgia;font-size:0.85rem;color:#444;line-height:1.5;margin-bottom:10px;padding:10px 12px;background:#fff;border-left:3px solid #173348;border-radius:4px;">
-              <strong>Cap Rate</strong> measures return on an <em>all-cash</em> purchase — NOI ÷ Price.
-              No mortgage, no debt — just pure income return. A 7% cap rate means the property generates
-              7¢ of income for every $1 paid. Investors targeting a 7–11% cap rate are typical in Northern New England multi-family.<br><br>
-              <strong>Cash-on-Cash Return (CoC)</strong> measures return on the <em>actual cash invested</em> — the down payment —
-              after paying the mortgage. Because you're using leverage, CoC can be higher than the cap rate
-              when financing makes sense. An 8–12% CoC is generally considered a good leveraged return.
             </div>
             <table style="width:100%;font-family:Georgia;font-size:0.9rem;border-collapse:collapse;">
               <thead>
@@ -897,14 +913,16 @@ if _prop_type_now == "Multi Family":
                 </tr>
               </thead>
               <tbody>
+                {_cap_rate_blurb}
                 {_section_hdr(f"💵 Cash Purchase — Cap Rate &nbsp;·&nbsp; Current NOI ${_noi_cur:,.0f}/yr")}
                 {_cap_rows_cur}
                 {_cap_rows_mkt}
+                {_coc_blurb}
                 {_coc_rows}
               </tbody>
             </table>
             <div style="font-size:0.78rem;color:#888;margin-top:8px;font-style:italic;">
-              A lower price = higher return = more attractive to investors. Final list price reflects comps and market conditions, not income alone.{_coc_col_note}
+              A lower price = higher return = more attractive to investors. Final list price reflects comps and market conditions, not income alone.
             </div>
             </div>
             """,
@@ -991,6 +1009,19 @@ with rec_col2:
     rec_clean = st.checkbox("🧹 Deep Clean / Clear Out Recommended", key="rec_clean")
     rec_subdivision = st.checkbox("📐 Land Subdivision Opportunity", key="rec_subdivision")
     rec_painting = st.checkbox("🎨 Painting / Complete A Few Projects", key="rec_painting")
+
+if st.session_state.get("s_type") == "Multi Family":
+    st.markdown("*Multi-Family specific:*")
+    mf_rec_col1, mf_rec_col2 = st.columns(2)
+    with mf_rec_col1:
+        rec_organize_leases = st.checkbox("📁 Organize Leases & Tenant Documents", key="rec_organize_leases")
+        rec_evict_tenants   = st.checkbox("🚪 Consider Evicting Problem Tenants", key="rec_evict_tenants")
+    with mf_rec_col2:
+        rec_system_repairs  = st.checkbox("🔧 Make Repairs to Major Systems", key="rec_system_repairs")
+else:
+    rec_organize_leases = False
+    rec_evict_tenants   = False
+    rec_system_repairs  = False
 
 st.markdown("---")
 
@@ -1136,6 +1167,9 @@ if rec_staging:      recs.append("staging")
 if rec_clean:        recs.append("deep_clean")
 if rec_subdivision:  recs.append("land_subdivision")
 if rec_painting:     recs.append("painting_projects")
+if rec_organize_leases: recs.append("organize_leases")
+if rec_evict_tenants:   recs.append("evict_tenants")
+if rec_system_repairs:  recs.append("system_repairs")
 
 st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
 generate = st.button("📄 Generate CMA PDF", key="generate_btn")
