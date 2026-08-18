@@ -716,6 +716,134 @@ if _prop_type_now == "Multi Family":
         """,
         unsafe_allow_html=True,
     )
+
+    # ── Suggested Price Range ──────────────────────────────────────────────
+    def _price_at_cap(noi, cap_pct):
+        return int(noi / (cap_pct / 100)) if cap_pct > 0 and noi > 0 else 0
+
+    def _ads_for_price(price, down_pct, rate, term_yrs):
+        """Annual debt service for a given price and loan terms."""
+        loan = price * (1 - down_pct / 100)
+        rm   = (rate / 100) / 12
+        n    = term_yrs * 12
+        if rm > 0 and loan > 0:
+            pmt = loan * (rm * (1 + rm) ** n) / ((1 + rm) ** n - 1)
+        else:
+            pmt = loan / n if n > 0 else 0
+        return pmt * 12
+
+    def _leveraged_return(noi, price, down_pct, rate, term_yrs):
+        """Cash-on-cash return = (NOI - debt service) / down payment."""
+        down = price * (down_pct / 100)
+        ads  = _ads_for_price(price, down_pct, rate, term_yrs)
+        cf   = noi - ads
+        return (cf / down * 100) if down > 0 else 0.0, cf, ads
+
+    CAP_LOW, CAP_HIGH = 7.0, 11.0
+
+    if _noi_cur > 0:
+        _pr_at_7_cur  = _price_at_cap(_noi_cur, CAP_LOW)
+        _pr_at_11_cur = _price_at_cap(_noi_cur, CAP_HIGH)
+        _pr_at_7_mkt  = _price_at_cap(_noi_mkt, CAP_LOW)  if _has_upside else 0
+        _pr_at_11_mkt = _price_at_cap(_noi_mkt, CAP_HIGH) if _has_upside else 0
+
+        # For each price point, compute financed metrics
+        def _fin_cols(noi, price):
+            if not _show_financing or price <= 0:
+                return "", "", ""
+            coc, cf, ads = _leveraged_return(noi, price, _down_pct, _rate_annual, _term_yrs)
+            down = price * (_down_pct / 100)
+            cf_c = _cf_color(cf)
+            return (
+                f"${ads:,.0f}/yr",
+                f"<span style='color:{cf_c};font-weight:700;'>${cf:,.0f}/yr</span>",
+                f"<span style='color:{cf_c};font-weight:700;'>{coc:.2f}%</span>",
+            )
+
+        def _rec_row_html(label, price, noi, pink=False, separator=False):
+            c = "#E91E63" if pink else "#173348"
+            bg = "#FFF0F5" if pink else "#EEF3F8"
+            sep = f"border-top:2px solid #173348;" if separator else ""
+            ads_str, cf_str, coc_str = _fin_cols(noi, price)
+            fin_td = (
+                f"<td style='text-align:right;padding:4px 6px;font-size:0.85rem;'>{ads_str}</td>"
+                f"<td style='text-align:right;padding:4px 6px;font-size:0.85rem;'>{cf_str}</td>"
+                f"<td style='text-align:right;padding:4px 6px;font-size:0.85rem;'>{coc_str}</td>"
+            ) if _show_financing else ""
+            return (
+                f"<tr style='background:{bg};{sep}'>"
+                f"<td style='padding:5px 8px;color:{c};font-weight:600;font-size:0.88rem;'>{label}</td>"
+                f"<td style='text-align:right;padding:5px 8px;color:{c};font-weight:700;font-size:1rem;'>${price:,.0f}</td>"
+                f"{fin_td}"
+                f"</tr>"
+            )
+
+        _fin_header = (
+            "<th style='text-align:right;padding:4px 6px;color:#fff;background:#173348;font-size:0.82rem;'>Debt Svc/yr</th>"
+            "<th style='text-align:right;padding:4px 6px;color:#fff;background:#173348;font-size:0.82rem;'>Cash Flow/yr</th>"
+            "<th style='text-align:right;padding:4px 6px;color:#fff;background:#173348;font-size:0.82rem;'>CoC Return</th>"
+        ) if _show_financing else ""
+
+        _fin_subheader = (
+            f"<div style='font-family:Georgia;font-size:0.8rem;color:#555;margin-bottom:6px;'>"
+            f"Financing columns assume <strong>{_down_pct:.0f}% down</strong> @ "
+            f"<strong>{_rate_annual:.3f}%</strong> for <strong>{_term_yrs} years</strong> "
+            f"(CoC = cash-on-cash return on the down payment)."
+            f"</div>"
+        ) if _show_financing else ""
+
+        _mkt_rows_html = ""
+        if _has_upside and _pr_at_7_mkt > 0:
+            _mkt_rows_html = (
+                f"<tr><td colspan='{'7' if _show_financing else '2'}' style='padding:5px 8px 2px;color:#E91E63;font-weight:700;font-size:0.82rem;border-top:2px solid #E91E63;'>📈 At Market Rents</td></tr>"
+                + _rec_row_html(f"{CAP_LOW:.0f}% cash cap rate (investor ceiling)", _pr_at_7_mkt, _noi_mkt, pink=True)
+                + _rec_row_html(f"{CAP_HIGH:.0f}% cash cap rate (strong value)", _pr_at_11_mkt, _noi_mkt, pink=True)
+            )
+
+        # Store for PDF
+        _sd["mf_pr_at_7_cur"]  = _pr_at_7_cur
+        _sd["mf_pr_at_11_cur"] = _pr_at_11_cur
+        _sd["mf_pr_at_7_mkt"]  = _pr_at_7_mkt
+        _sd["mf_pr_at_11_mkt"] = _pr_at_11_mkt
+        _sd["mf_cap_low"]      = CAP_LOW
+        _sd["mf_cap_high"]     = CAP_HIGH
+
+        st.markdown(
+            f"""
+            <div style="background:#F0F7FF;border:2px solid #173348;border-radius:8px;padding:14px 20px;margin-top:12px;">
+            <div style="font-family:Georgia;color:#173348;font-size:1rem;font-weight:700;margin-bottom:6px;">
+              💡 Income-Based Price Recommendation
+            </div>
+            <div style="font-family:Georgia;font-size:0.85rem;color:#555;margin-bottom:8px;">
+              The <strong>cash cap rate</strong> (7–11% target) is the primary metric — it measures
+              return on a cash purchase. When financing is used, the <strong>cash-on-cash return</strong>
+              measures return on just the down payment. Both are shown below at key price points.
+            </div>
+            {_fin_subheader}
+            <table style="width:100%;font-family:Georgia;font-size:0.9rem;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:4px 8px;color:#fff;background:#173348;">Price Scenario</th>
+                  <th style="text-align:right;padding:4px 8px;color:#fff;background:#173348;">Implied Price</th>
+                  {_fin_header}
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="{'7' if _show_financing else '2'}" style="padding:5px 8px 2px;color:#173348;font-weight:700;font-size:0.82rem;">💵 Cash Buyer Analysis — Current Rents</td></tr>
+                {_rec_row_html(f"{CAP_LOW:.0f}% cash cap rate — investor ceiling (NOI ÷ price = {CAP_LOW}%)", _pr_at_7_cur, _noi_cur)}
+                {_rec_row_html(f"{CAP_HIGH:.0f}% cash cap rate — strong investor value", _pr_at_11_cur, _noi_cur)}
+                {_mkt_rows_html}
+              </tbody>
+            </table>
+            <div style="font-size:0.78rem;color:#888;margin-top:8px;font-style:italic;">
+              Cap rate = NOI ÷ Price (cash, no debt). Cash-on-cash = (NOI − Debt Service) ÷ Down Payment.
+              These are income-based targets; final list price reflects comps and market conditions.
+            </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
