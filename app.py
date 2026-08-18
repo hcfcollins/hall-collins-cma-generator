@@ -891,10 +891,15 @@ if _prop_type_now == "Multi Family":
             <tr><td colspan="3" style="padding:8px 8px 6px;">
               <div style="font-family:Georgia;font-size:0.82rem;color:#444;line-height:1.5;
                           padding:8px 12px;background:#EEF3F8;border-left:3px solid #173348;border-radius:3px;">
-                <strong>Cash-on-Cash Return (CoC)</strong> — return on just the <em>down payment</em>
-                after paying the mortgage ({_down_pct:.0f}% down @ {_rate_annual:.2f}%).
-                Because of leverage, CoC can be higher than the cap rate.
-                An 8–12% CoC is generally considered a strong leveraged return.
+                <strong>A Note on Financing and List Price Strategy</strong><br><br>
+                Most serious multi-family investors underwrite to a cash cap rate first.
+                We recommend <strong>starting at the cash-based price above</strong> — it is well-supported by the income.
+                However, if buyer feedback points to a financed buyer pool, it's worth knowing what price
+                delivers an attractive cash-on-cash return.<br><br>
+                A good CoC is generally <strong>{COC_LOW:.0f}–{COC_HIGH:.0f}%</strong>
+                ({_down_pct:.0f}% down @ {_rate_annual:.2f}%).
+                If the current recommended price doesn't hit that target, a price reduction may be needed —
+                and the cap rate rows above give you the ceiling for any such adjustment.
               </div>
             </td></tr>""" if _show_financing and _pr_coc8_cur > 0 else ""
 

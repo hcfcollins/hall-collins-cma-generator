@@ -1067,11 +1067,17 @@ def _build_cap_rate_analysis(subject, price_rec, s):
 
             fin_lbl = f"{down_pct_v:.0f}% down @ {rate_v:.2f}% / {term_v} yr"
             elems.append(Paragraph(
-                f"<b>Cash-on-Cash Return (CoC)</b> — return on just the down payment ({fin_lbl}) "
-                "after paying the mortgage. Because of leverage, CoC can be higher than the cap rate. "
-                f"An {coc_lo:.0f}\u2013{coc_hi:.0f}% CoC is generally considered a strong leveraged return. "
-                f"The table below shows the CoC at the recommended price of <b>${price_rec:,}</b>, "
-                "matching the financing scenario on the next page.",
+                f"<b>A Note on Financing and List Price Strategy</b><br/><br/>"
+                f"Most serious multi-family investors in this market purchase in cash or with significant "
+                f"reserves, and they underwrite to a cash cap rate first. We recommend <b>starting at the "
+                f"cash-based price above</b> — it is well-supported by the income. However, if buyer activity "
+                f"is soft or feedback points to a financed buyer pool, it is worth understanding what price "
+                f"delivers an attractive cash-on-cash return under a financed scenario.<br/><br/>"
+                f"A good CoC return is generally <b>{coc_lo:.0f}–{coc_hi:.0f}%</b>. "
+                f"The table below shows what today's recommended price ({_money(price_rec)}) actually "
+                f"delivers on a financed basis ({fin_lbl}). "
+                f"If that number is below {coc_lo:.0f}%, a price reduction may be necessary to attract "
+                f"financed buyers — and the cap rate target rows above give you the ceiling for any such adjustment.",
                 _blurb_style
             ))
             elems.append(Spacer(1, 8))
