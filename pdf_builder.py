@@ -331,7 +331,8 @@ def _build_price_recommendation(subject, comps, price_low, price_high, price_rec
 
 
 def _build_research_notes(subject, recommendations, s):
-    elems = _section_header("Agent Recommendations", s)
+    elems = [PageBreak()]
+    elems += _section_header("Agent Recommendations", s)
 
     rec_map = {
         "wait_spring": ("🌸 Wait for Spring",
@@ -432,7 +433,8 @@ def _build_agent_notes(subject, s):
     notes = subject.get("agent_notes", "").strip()
     if not notes:
         return []
-    elems = _section_header("Agent Notes", s)
+    elems = [PageBreak()]
+    elems += _section_header("Agent Notes", s)
     # Split on blank lines to preserve paragraph breaks
     paragraphs = [p.strip() for p in notes.split("\n\n") if p.strip()]
     if not paragraphs:
@@ -832,8 +834,24 @@ def _build_cap_rate_analysis(subject, price_rec, s):
         def _cf_color(val):
             return GREEN if val >= 0 else RED
 
-        elems.append(Spacer(1, 10))
-        elems.append(HRFlowable(width="100%", thickness=1, color=NAVY, spaceAfter=6))
+        elems.append(PageBreak())
+        elems += _section_header("Financing Scenario Analysis", s)
+
+        # ── CoC blurb — explain the metric BEFORE the table ───────────────
+        _fin_blurb_style = ParagraphStyle(
+            "_finblurb", fontName="Times-Roman", fontSize=10, textColor=colors.HexColor("#333333"),
+            leading=14, leftIndent=6, rightIndent=6, spaceAfter=8,
+            backColor=colors.HexColor("#EEF3F8"), borderPadding=(6, 10, 6, 10),
+        )
+        elems.append(Paragraph(
+            f"<b>Cash-on-Cash Return (CoC)</b> answers the question an investor with a mortgage "
+            f"actually cares about: after making the down payment and covering the mortgage every month, "
+            f"how much cash is left over — and what return does that represent on the money I put in? "
+            f"This scenario assumes <b>{down_pct:.0f}% down at {rate:.3f}% interest over {term_yrs} years</b>. "
+            f"An 8–12% CoC is generally considered a strong leveraged return in this market.",
+            _fin_blurb_style
+        ))
+        elems.append(Spacer(1, 8))
         elems.append(Paragraph(
             f"FINANCING SCENARIO — {down_pct:.0f}% Down @ {rate:.3f}% Interest, {term_yrs}-Year Term",
             ParagraphStyle("fin_hdr", fontName="Times-Bold", fontSize=11,
@@ -955,14 +973,58 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     term_v       = int(subject.get("mf_loan_term_yrs", 30))
 
     if pr_at_7_cur > 0:
-        elems.append(Spacer(1, 14))
-        elems.append(HRFlowable(width="100%", thickness=1, color=NAVY, spaceAfter=6))
-        elems.append(Paragraph(
-            "INCOME-BASED PRICE RECOMMENDATION",
-            ParagraphStyle("rec_hdr", fontName="Times-Bold", fontSize=11,
-                           textColor=NAVY, spaceAfter=4)
-        ))
+        elems.append(PageBreak())
+        elems += _section_header("Income-Based Price Recommendation", s)
         elems.append(Spacer(1, 6))
+
+        # ── Recommended price summary callout box ─────────────────────────
+        _rec_price = price_rec if price_rec else 0
+        _cap_at_rec_cur = (noi_cur / _rec_price * 100) if _rec_price > 0 else 0
+        _cap_at_rec_mkt = (noi_mkt / _rec_price * 100) if (_rec_price > 0 and noi_mkt > 0) else 0
+
+        _summary_rows = [[
+            Paragraph("<b>Recommended Price</b>",
+                      ParagraphStyle("_sl", fontName="Times-Bold", fontSize=10, textColor=WHITE)),
+            Paragraph("<b>Cap Rate — Current Rents</b>",
+                      ParagraphStyle("_sl2", fontName="Times-Bold", fontSize=10, textColor=WHITE)),
+        ]]
+        _summary_vals = [
+            Paragraph(f"<b>${_rec_price:,}</b>",
+                      ParagraphStyle("_sv", fontName="Times-Bold", fontSize=16, textColor=PINK,
+                                     alignment=TA_CENTER)),
+            Paragraph(f"<b>{_cap_at_rec_cur:.2f}%</b>",
+                      ParagraphStyle("_sv2", fontName="Times-Bold", fontSize=16, textColor=NAVY,
+                                     alignment=TA_CENTER)),
+        ]
+        if noi_mkt > 0 and noi_mkt != noi_cur:
+            _summary_rows[0].append(
+                Paragraph("<b>Cap Rate — Market Rents (Upside)</b>",
+                          ParagraphStyle("_sl3", fontName="Times-Bold", fontSize=10, textColor=WHITE))
+            )
+            _summary_vals.append(
+                Paragraph(f"<b>{_cap_at_rec_mkt:.2f}%</b>",
+                          ParagraphStyle("_sv3", fontName="Times-Bold", fontSize=16, textColor=PINK,
+                                         alignment=TA_CENTER))
+            )
+            _sum_col_w = [2.1*inch, 2.1*inch, 2.1*inch]
+        else:
+            _sum_col_w = [3.0*inch, 3.3*inch]
+
+        _summary_rows.append(_summary_vals)
+        _sum_tbl = Table(_summary_rows, colWidths=_sum_col_w)
+        _sum_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+            ("BACKGROUND",    (0, 1), (-1, 1),  colors.HexColor("#F0F7FF")),
+            ("BOX",           (0, 0), (-1, -1), 2, NAVY),
+            ("INNERGRID",     (0, 0), (-1, -1), 0.5, colors.HexColor("#CCDDEE")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+            ("ALIGN",         (0, 1), (-1, 1),  "CENTER"),
+        ]))
+        elems.append(KeepTogether([_sum_tbl]))
+        elems.append(Spacer(1, 12))
 
         LBLUE  = colors.HexColor("#EEF3F8")
         LLBLUE = colors.HexColor("#F7FAFD")
