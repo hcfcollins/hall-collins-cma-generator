@@ -507,19 +507,22 @@ def _build_cap_rate_analysis(subject, price_rec, s):
     insurance    = subject.get("mf_insurance", 0)
     maintenance  = subject.get("mf_maintenance", 0)
     reserve_pct  = float(subject.get("mf_reserve_pct", 5.0))
-    reserve_cur  = subject.get("mf_reserve_cur", round(gross_cur * reserve_pct / 100))
-    reserve_mkt  = subject.get("mf_reserve_mkt", round(gross_mkt * reserve_pct / 100))
     base_expenses = subject.get("mf_base_expenses", taxes + insurance + maintenance)
-    expenses     = subject.get("mf_total_expenses", base_expenses + reserve_cur)
 
     gross_cur   = subject.get("mf_gross_income", 0)
     eff_cur     = subject.get("mf_eff_gross", gross_cur * (1 - vacancy / 100))
-    noi_cur     = subject.get("mf_noi", eff_cur - expenses)
-    cap_cur     = subject.get("mf_cap_rate", (noi_cur / price_rec * 100) if price_rec else 0)
 
     gross_mkt   = subject.get("mf_gross_income_mkt", 0)
     eff_mkt     = subject.get("mf_eff_gross_mkt", gross_mkt * (1 - vacancy / 100))
-    noi_mkt     = subject.get("mf_noi_mkt", eff_mkt - expenses)
+
+    reserve_cur  = subject.get("mf_reserve_cur", round(gross_cur * reserve_pct / 100))
+    reserve_mkt  = subject.get("mf_reserve_mkt", round(gross_mkt * reserve_pct / 100))
+    expenses     = subject.get("mf_total_expenses", base_expenses + reserve_cur)
+
+    noi_cur     = subject.get("mf_noi", eff_cur - expenses)
+    cap_cur     = subject.get("mf_cap_rate", (noi_cur / price_rec * 100) if price_rec else 0)
+
+    noi_mkt     = subject.get("mf_noi_mkt", eff_mkt - (base_expenses + reserve_mkt))
     cap_mkt     = subject.get("mf_cap_rate_mkt", (noi_mkt / price_rec * 100) if price_rec else 0)
     has_market  = gross_mkt != gross_cur and gross_mkt > 0
 
