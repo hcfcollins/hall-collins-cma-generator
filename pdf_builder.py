@@ -521,6 +521,221 @@ def _make_page_template(canvas, doc, logo_path):
 
 # ── Master Build ──────────────────────────────────────────────────────────────
 
+def _build_land_analysis(subject, price_rec, s):
+    """Build a land valuation analysis section for Land property type."""
+    elems = []
+    elems += _section_header("Land Valuation Analysis", s)
+
+    def _money(v):
+        try:
+            return f"${v:,.0f}"
+        except Exception:
+            return str(v)
+
+    def _rp(text, align=TA_RIGHT, bold=False, color=DGRAY, size=10):
+        fn = "Times-Bold" if bold else "Times-Roman"
+        return Paragraph(text, ParagraphStyle("_lrp", fontName=fn, fontSize=size,
+                                              textColor=color, alignment=align))
+
+    acres            = float(subject.get("land_acres") or subject.get("lot_acres") or 0)
+    base_val         = subject.get("land_base_value", 35000)
+    acre_val         = subject.get("land_acre_value", round(acres * 1000))
+    road_premium     = subject.get("land_road_premium", 0)
+    contiguous_prem  = subject.get("land_contiguous_premium", 0)
+    perc_premium     = subject.get("land_perc_premium", 0)
+    dev_value        = subject.get("land_dev_value", 0)
+    suggested        = subject.get("land_suggested_price", base_val + acre_val + road_premium + contiguous_prem + perc_premium + dev_value)
+    road_frontage    = subject.get("land_road_frontage", "")
+    parcel_char      = subject.get("land_contiguous", "")
+    perc_status      = subject.get("land_perc_status", "")
+
+    # Development items checked
+    dev_items = {
+        "land_dev_well":          ("Well",              20000),
+        "land_dev_perc_test":     ("Perc Test",          5000),
+        "land_dev_septic_design": ("Septic Design",      8000),
+        "land_dev_septic":        ("Septic Installed",  25000),
+        "land_dev_clearing":      ("Clearing",          10000),
+        "land_dev_driveway":      ("Driveway",          15000),
+        "land_dev_electric":      ("Electrical",        12000),
+        "land_dev_internet":      ("Internet",           3000),
+    }
+    completed_dev = [(lbl, val) for key, (lbl, val) in dev_items.items() if subject.get(key)]
+    not_completed_dev = [(lbl, val) for key, (lbl, val) in dev_items.items() if not subject.get(key)]
+
+    # ── Intro blurb ───────────────────────────────────────────────────────────
+    _intro_style = ParagraphStyle(
+        "_land_intro", fontName="Times-Roman", fontSize=10, textColor=DGRAY,
+        leading=14, alignment=TA_JUSTIFY, spaceAfter=8,
+        backColor=colors.HexColor("#EEF3F8"), borderPadding=(8, 10, 8, 10),
+        leftIndent=4, rightIndent=4,
+    )
+    elems.append(Paragraph(
+        "<b>How land is priced</b> — Land value in this market is a sliding scale based entirely on "
+        "the level of development already completed. Every parcel starts at a <b>$35,000 baseline</b> "
+        "regardless of size, then adds approximately <b>$1,000 per acre</b> of undeveloped land. "
+        "From there, value increases based on what work has already been done — a driveway, well, "
+        "septic, electrical service, and cleared site prep all reduce the buyer's cost and risk, "
+        "and are reflected directly in the price.",
+        _intro_style
+    ))
+    elems.append(Spacer(1, 10))
+
+    # ── Valuation breakdown table ─────────────────────────────────────────────
+    col_w = [4.5*inch, 1.8*inch]
+    header = [
+        Paragraph("<b>Value Component</b>", s["label"]),
+        _rp("<b>Amount</b>", bold=True, color=WHITE),
+    ]
+    tbl_data = [header]
+
+    def _vrow(label, val, bold=False, color=NAVY):
+        return [
+            Paragraph(f"<b>{label}</b>" if bold else label, s["body"]),
+            _rp(f"<b>{_money(val)}</b>" if bold else _money(val), bold=bold, color=color),
+        ]
+
+    tbl_data.append(_vrow("Base land value (all parcels)", base_val))
+    tbl_data.append(_vrow(f"Acreage value ({acres:.1f} acres × $1,000/acre)", acre_val))
+
+    if road_premium:
+        tbl_data.append(_vrow(f"Road frontage premium — {road_frontage}", road_premium))
+    if contiguous_prem:
+        tbl_data.append(_vrow(f"Parcel character — {parcel_char}", contiguous_prem))
+    if perc_premium:
+        tbl_data.append(_vrow(f"Perc/soil work — {perc_status}", perc_premium))
+
+    if completed_dev:
+        # Sub-header row for dev items
+        tbl_data.append([
+            Paragraph("<i>Development Improvements Completed:</i>",
+                      ParagraphStyle("_dsh", fontName="Times-Italic", fontSize=9,
+                                     textColor=NAVY, spaceAfter=0)),
+            Paragraph("", s["body"]),
+        ])
+        for dlbl, dval in completed_dev:
+            tbl_data.append(_vrow(f"    {dlbl}", dval))
+
+    tbl_data.append(_vrow("Suggested List Price", suggested, bold=True, color=PINK))
+
+    land_tbl = Table(tbl_data, colWidths=col_w)
+    land_style = [
+        ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -2), [WHITE, LGRAY]),
+        ("BACKGROUND",    (0, -1), (-1, -1), BLUSH),
+        ("LINEABOVE",     (0, -1), (-1, -1), 1.5, PINK),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+    ]
+    land_tbl.setStyle(TableStyle(land_style))
+    elems.append(land_tbl)
+    elems.append(Spacer(1, 12))
+
+    # ── Improvements status checklist ─────────────────────────────────────────
+    all_items = list(dev_items.values())  # [(label, val), ...]
+    imp_header = [
+        Paragraph("<b>Improvement</b>", s["label"]),
+        _rp("<b>Status</b>", bold=True, color=WHITE),
+        _rp("<b>Est. Value</b>", bold=True, color=WHITE),
+    ]
+    imp_rows = [imp_header]
+    GREEN_IMP = colors.HexColor("#2e7d32")
+    RED_IMP   = colors.HexColor("#c62828")
+    comp_set = {lbl for lbl, _ in completed_dev}
+    for lbl, val in all_items:
+        done = lbl in comp_set
+        status_txt = "Yes" if done else "No"
+        status_col = GREEN_IMP if done else RED_IMP
+        imp_rows.append([
+            Paragraph(lbl, s["body"]),
+            _rp(f"<b>{status_txt}</b>", bold=True, color=status_col),
+            _rp(_money(val) if done else "—", color=NAVY if done else DGRAY),
+        ])
+    imp_tbl = Table(imp_rows, colWidths=[3.5*inch, 1.2*inch, 1.6*inch])
+    imp_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+    ]))
+    elems.append(Paragraph("<b>Property Improvements Checklist</b>",
+                           ParagraphStyle("_imp_hdr", fontName="Times-Bold", fontSize=10,
+                                          textColor=NAVY, spaceAfter=4)))
+    elems.append(imp_tbl)
+    elems.append(Spacer(1, 12))
+
+    # ── Land comps table ──────────────────────────────────────────────────────
+    land_comps = subject.get("land_comps", [])
+    land_comps = [c for c in land_comps if c.get("address") or c.get("sale_price")]
+    if land_comps:
+        elems.append(Paragraph("<b>Land Comparable Sales</b>",
+                               ParagraphStyle("_lc_hdr", fontName="Times-Bold", fontSize=10,
+                                              textColor=NAVY, spaceAfter=4)))
+        lc_header = [
+            Paragraph("<b>Address</b>", s["label"]),
+            _rp("<b>Sale Price</b>", bold=True, color=WHITE),
+            _rp("<b>Acres</b>", bold=True, color=WHITE),
+            Paragraph("<b>Notes</b>", s["label"]),
+        ]
+        lc_rows = [lc_header]
+        for lc in land_comps:
+            sp = lc.get("sale_price", 0)
+            ac = lc.get("acres", 0)
+            ppa = f"({_money(sp / ac)}/ac)" if sp and ac else ""
+            lc_rows.append([
+                Paragraph(lc.get("address", "—"), s["body"]),
+                _rp(f"<b>{_money(sp)}</b>" if sp else "—", bold=bool(sp), color=NAVY),
+                _rp(f"{ac:.1f} ac  {ppa}" if ac else "—", color=DGRAY),
+                Paragraph(lc.get("notes", ""), s["body"]),
+            ])
+        lc_tbl = Table(lc_rows, colWidths=[2.0*inch, 1.3*inch, 1.2*inch, 1.8*inch])
+        lc_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  NAVY),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, LGRAY]),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        ]))
+        elems.append(lc_tbl)
+        elems.append(Spacer(1, 12))
+
+    # ── Strategy note ──────────────────────────────────────────────────────────
+    _strat_style = ParagraphStyle(
+        "_land_strat", fontName="Times-Roman", fontSize=9.5, textColor=colors.HexColor("#222222"),
+        leading=13, leftIndent=8, rightIndent=8, spaceAfter=6,
+        backColor=colors.HexColor("#EEF3F8"), borderPadding=(6, 10, 6, 10),
+    )
+    _dev_sentence = ""
+    if not completed_dev:
+        _dev_sentence = (
+            " Since this parcel is <b>undeveloped</b>, a buyer will need to budget for all "
+            "site work — driveway, well, septic, and electrical — before construction can begin. "
+            "That full cost burden is reflected in the conservative pricing above."
+        )
+    elif len(completed_dev) >= 3:
+        _dev_sentence = (
+            f" With {len(completed_dev)} development items already completed "
+            f"({', '.join(d[0] for d in completed_dev[:3])}{'...' if len(completed_dev) > 3 else ''}), "
+            f"this parcel offers meaningful value to a buyer who wants to move quickly."
+        )
+
+    elems.append(Paragraph(
+        f"<b>Pricing Note:</b> At <b>{_money(suggested)}</b>, this parcel is priced to reflect its "
+        f"current state of development and the local market for raw or partially improved land.{_dev_sentence} "
+        f"Land can be a patient asset — pricing above the model's output is possible, but expect longer "
+        f"days on market unless demand is unusually strong or a specific buyer need aligns with this parcel.",
+        _strat_style
+    ))
+    elems.append(Spacer(1, 8))
+
+    return elems
+
+
 def _build_cap_rate_analysis(subject, price_rec, s):
     """Build a cap rate analysis section for multi-family properties."""
     elems = []
@@ -1265,6 +1480,11 @@ def _build_cma_pdf_bytes(subject, comps, recommendations,
     # Multi-family cap rate analysis (only for multi-family)
     if subject.get("property_type") == "Multi Family" and subject.get("mf_units"):
         story += _build_cap_rate_analysis(subject, price_rec, s)
+        story.append(_divider())
+
+    # Land valuation analysis (only for Land)
+    if subject.get("property_type") == "Land" and subject.get("land_acres"):
+        story += _build_land_analysis(subject, price_rec, s)
         story.append(_divider())
 
     # Recommendations

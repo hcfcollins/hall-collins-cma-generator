@@ -941,6 +941,207 @@ if _prop_type_now == "Multi Family":
     st.markdown("---")
 
 # ══════════════════════════════════════════════════════════════════════════════
+# STEP 1b — LAND VALUATION ANALYSIS (conditional)
+# ══════════════════════════════════════════════════════════════════════════════
+if _prop_type_now == "Land":
+    st.markdown('<div class="section-label">Step 1b — Land Valuation Analysis</div>', unsafe_allow_html=True)
+    st.markdown(
+        "Land pricing is a sliding scale based on the level of development already completed. "
+        "Fill in the details below — the model will calculate an income-based price suggestion "
+        "that will appear in the CMA."
+    )
+    _lsd = st.session_state.subject_data
+
+    land_col1, land_col2 = st.columns(2)
+    with land_col1:
+        _lsd["land_acres"] = st.number_input(
+            "Lot Size (acres)", min_value=0.0, step=1.0,
+            value=float(_lsd.get("land_acres") or _lsd.get("lot_acres") or 0.0),
+            key="land_acres",
+            help="Total acreage of the parcel.",
+        )
+        _lsd["land_road_frontage"] = st.selectbox(
+            "Road Frontage",
+            ["None", "Private Road / ROW", "Public Road — Town Maintained", "Public Road — State Route"],
+            index=["None", "Private Road / ROW", "Public Road — Town Maintained", "Public Road — State Route"].index(
+                _lsd.get("land_road_frontage", "None")
+            ),
+            key="land_road_frontage",
+        )
+    with land_col2:
+        _lsd["land_contiguous"] = st.selectbox(
+            "Parcel Character",
+            ["Standard lot", "Large contiguous parcel (bonus)", "Multiple non-contiguous parcels"],
+            index=["Standard lot", "Large contiguous parcel (bonus)", "Multiple non-contiguous parcels"].index(
+                _lsd.get("land_contiguous", "Standard lot")
+            ),
+            key="land_contiguous",
+        )
+        _lsd["land_perc_status"] = st.selectbox(
+            "Perc Test / Soil Work",
+            ["None done", "Perc test passed", "Septic design on file", "Permit approved"],
+            index=["None done", "Perc test passed", "Septic design on file", "Permit approved"].index(
+                _lsd.get("land_perc_status", "None done")
+            ),
+            key="land_perc_status",
+        )
+
+    st.markdown("**Development / Improvements Already on the Property** *(check all that apply)*")
+    _dev_opts = [
+        ("Well",             "land_dev_well",        20000),
+        ("Perc Test",        "land_dev_perc_test",    5000),
+        ("Septic Design",    "land_dev_septic_design",8000),
+        ("Septic Installed", "land_dev_septic",      25000),
+        ("Clearing",         "land_dev_clearing",    10000),
+        ("Driveway",         "land_dev_driveway",    15000),
+        ("Electrical",       "land_dev_electric",    12000),
+        ("Internet",         "land_dev_internet",     3000),
+    ]
+    _dev_col1, _dev_col2 = st.columns(2)
+    _total_dev_value = 0
+    for _di, (_dlabel, _dkey, _dval) in enumerate(_dev_opts):
+        _col = _dev_col1 if _di % 2 == 0 else _dev_col2
+        with _col:
+            _checked = st.checkbox(
+                f"{_dlabel}  *(+${_dval:,})*",
+                value=_lsd.get(_dkey, False),
+                key=_dkey,
+            )
+            _lsd[_dkey] = _checked
+            if _checked:
+                _total_dev_value += _dval
+
+    # ── Land price calculation ─────────────────────────────────────────────
+    _land_acres   = float(_lsd.get("land_acres", 0))
+    _land_base    = 35000
+    _land_per_acre = 1000
+    _land_acre_val = round(_land_acres * _land_per_acre)
+
+    # Road frontage premium
+    _road_premium = {
+        "None": 0,
+        "Private Road / ROW": 5000,
+        "Public Road — Town Maintained": 20000,
+        "Public Road — State Route": 15000,
+    }.get(_lsd.get("land_road_frontage", "None"), 0)
+
+    # Contiguous/character premium
+    _contiguous_premium = {
+        "Standard lot": 0,
+        "Large contiguous parcel (bonus)": 50000,
+        "Multiple non-contiguous parcels": -10000,
+    }.get(_lsd.get("land_contiguous", "Standard lot"), 0)
+
+    # Perc / soil work premium
+    _perc_premium = {
+        "None done": 0,
+        "Perc test passed": 5000,
+        "Septic design on file": 12000,
+        "Permit approved": 18000,
+    }.get(_lsd.get("land_perc_status", "None done"), 0)
+
+    _land_suggested = _land_base + _land_acre_val + _road_premium + _contiguous_premium + _perc_premium + _total_dev_value
+    _land_low  = round(_land_suggested * 0.85 / 5000) * 5000
+    _land_high = round(_land_suggested * 1.10 / 5000) * 5000
+
+    # Store for PDF and price seeding
+    _lsd["land_base_value"]       = _land_base
+    _lsd["land_acre_value"]       = _land_acre_val
+    _lsd["land_road_premium"]     = _road_premium
+    _lsd["land_contiguous_premium"] = _contiguous_premium
+    _lsd["land_perc_premium"]     = _perc_premium
+    _lsd["land_dev_value"]        = _total_dev_value
+    _lsd["land_suggested_price"]  = _land_suggested
+    _lsd["land_price_low"]        = _land_low
+    _lsd["land_price_high"]       = _land_high
+
+    # Live preview
+    _breakdown_rows = [
+        ("Base land value (all parcels start here)", _land_base),
+        (f"Acreage value ({_land_acres:.1f} acres × $1,000/acre)", _land_acre_val),
+    ]
+    if _road_premium:
+        _breakdown_rows.append((f"Road frontage — {_lsd.get('land_road_frontage')}", _road_premium))
+    if _contiguous_premium:
+        _breakdown_rows.append((f"Parcel character — {_lsd.get('land_contiguous')}", _contiguous_premium))
+    if _perc_premium:
+        _breakdown_rows.append((f"Perc/soil status — {_lsd.get('land_perc_status')}", _perc_premium))
+    if _total_dev_value:
+        _breakdown_rows.append(("Development improvements completed", _total_dev_value))
+
+    _brows_html = "".join(
+        f'<tr style="background:{"#f9f0f4" if i%2==0 else "#fff"};">'
+        f'<td style="padding:4px 8px;">{_r[0]}</td>'
+        f'<td style="text-align:right;padding:4px 8px;color:{"#173348"};">+${_r[1]:,}</td>'
+        f'</tr>'
+        for i, _r in enumerate(_breakdown_rows)
+    )
+
+    st.markdown(
+        f"""
+        <div style="background:#FFF8FB;border:1px solid #E91E63;border-radius:8px;padding:14px 20px;margin-top:8px;">
+        <div style="font-family:Georgia;color:#173348;font-size:1rem;font-weight:700;margin-bottom:10px;">📐 Land Valuation Estimate</div>
+        <table style="width:100%;font-family:Georgia;font-size:0.9rem;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:4px 8px;color:#173348;border-bottom:2px solid #173348;">Component</th>
+              <th style="text-align:right;padding:4px 8px;color:#173348;border-bottom:2px solid #173348;">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {_brows_html}
+            <tr style="border-top:2px solid #173348;background:#fff0f5;">
+              <td style="padding:6px 8px;font-weight:700;color:#173348;">Suggested List Price</td>
+              <td style="text-align:right;padding:6px 8px;font-weight:700;color:#E91E63;font-size:1.1rem;">${_land_suggested:,}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:0.8rem;color:#999;margin-top:8px;font-style:italic;">
+          Suggested range: <strong>${_land_low:,} – ${_land_high:,}</strong> · 
+          This model uses a $35,000 base + $1,000/acre + premiums for development, road access, and parcel character.
+        </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── Land Comps ────────────────────────────────────────────────────────
+    st.markdown("**Land Comparable Sales** *(optional — enter up to 3 comparable land parcels)*")
+    _land_comps = _lsd.get("land_comps", [{}, {}, {}])
+    while len(_land_comps) < 3:
+        _land_comps.append({})
+    for _lci in range(3):
+        st.markdown(f"*Land Comp #{_lci + 1}*")
+        _lcc1, _lcc2, _lcc3, _lcc4 = st.columns([3, 1.5, 1.5, 3])
+        with _lcc1:
+            _land_comps[_lci]["address"] = st.text_input(
+                f"Address", value=_land_comps[_lci].get("address", ""),
+                placeholder="e.g. 456 Old County Rd, Woodstock, VT",
+                key=f"land_comp_{_lci}_addr", label_visibility="collapsed",
+            )
+        with _lcc2:
+            _land_comps[_lci]["sale_price"] = st.number_input(
+                f"Sale Price ($)", min_value=0, step=5000,
+                value=int(_land_comps[_lci].get("sale_price", 0)),
+                key=f"land_comp_{_lci}_price", label_visibility="collapsed",
+            )
+        with _lcc3:
+            _land_comps[_lci]["acres"] = st.number_input(
+                f"Acres", min_value=0.0, step=1.0,
+                value=float(_land_comps[_lci].get("acres", 0.0)),
+                key=f"land_comp_{_lci}_acres", label_visibility="collapsed",
+            )
+        with _lcc4:
+            _land_comps[_lci]["notes"] = st.text_input(
+                f"Notes", value=_land_comps[_lci].get("notes", ""),
+                placeholder="e.g. Similar acreage, no improvements, sold 2024",
+                key=f"land_comp_{_lci}_notes", label_visibility="collapsed",
+            )
+    _lsd["land_comps"] = [c for c in _land_comps if c.get("address") or c.get("sale_price")]
+
+    st.markdown("---")
+
+# ══════════════════════════════════════════════════════════════════════════════
 # STEP 2 — PRICING
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">Step 2 — Price Recommendation</div>', unsafe_allow_html=True)
@@ -968,6 +1169,26 @@ if _is_mf and _has_income_data:
         f"**${_default_low:,} – ${_default_high:,}**. "
         f"{'Market rents support up to ' + '${:,}'.format(round(st.session_state.subject_data.get('mf_pr_at_7_mkt',0)/5000)*5000) + '. ' if st.session_state.subject_data.get('mf_pr_at_7_mkt',0) > 0 else ''}"
         f"Adjust below as needed based on comps and condition.",
+        icon=None,
+    )
+
+# ── Auto-seed price range from land analysis ──────────────────────────────
+_is_land = st.session_state.get("s_type") == "Land"
+_land_low_suggest  = st.session_state.subject_data.get("land_price_low", 0)
+_land_high_suggest = st.session_state.subject_data.get("land_price_high", 0)
+_land_rec_suggest  = st.session_state.subject_data.get("land_suggested_price", 0)
+
+if _is_land and _land_low_suggest > 0:
+    if "price_low" not in st.session_state:
+        st.session_state["price_low"] = _land_low_suggest
+    if "price_high" not in st.session_state:
+        st.session_state["price_high"] = _land_high_suggest
+    st.info(
+        f"💡 **Land valuation suggestion** — "
+        f"based on acreage, development level, and parcel characteristics, "
+        f"the model suggests **${_land_rec_suggest:,}** "
+        f"(range: ${_land_low_suggest:,} – ${_land_high_suggest:,}). "
+        f"Adjust below as needed based on comps and local knowledge.",
         icon=None,
     )
 
