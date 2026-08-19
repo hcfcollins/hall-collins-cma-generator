@@ -1520,7 +1520,8 @@ def merge_cma_pdf(subject, comps, recommendations,
                    logo_path="hall_collins_logo.png",
                    anr_url=None,
                    supplemental_pdf_bytes=None,
-                   anr_pdf_bytes=None) -> bytes:
+                   anr_pdf_bytes=None,
+                   cover_pdf_path=None) -> bytes:
     """
     Build and merge the final CMA PDF:
       1. HC Cover Page         (always fixed)
@@ -1533,12 +1534,13 @@ def merge_cma_pdf(subject, comps, recommendations,
     writer = PdfWriter()
 
     # ── 1. HC Cover Page ──────────────────────────────────────────────────────
-    if not os.path.exists(COVER_PDF_PATH):
+    _cover_path = cover_pdf_path if cover_pdf_path else COVER_PDF_PATH
+    if not os.path.exists(_cover_path):
         raise FileNotFoundError(
-            f"Cover PDF not found: '{COVER_PDF_PATH}'\n"
+            f"Cover PDF not found: '{_cover_path}'\n"
             "Make sure it is in the same folder as the app."
         )
-    cover_reader = PdfReader(COVER_PDF_PATH)
+    cover_reader = PdfReader(_cover_path)
     for page in cover_reader.pages:
         writer.add_page(page)
 

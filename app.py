@@ -1379,6 +1379,20 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">Generate CMA Report</div>', unsafe_allow_html=True)
 
+# ── Agent selector ────────────────────────────────────────────────────────────
+_agent_options = ["— Default (Hall Collins) —", "Rachel Noyes"]
+_agent_cover_map = {
+    "Rachel Noyes": "HC - Rachel Noyes CMA Cover Sheet.pdf",
+}
+selected_agent = st.selectbox(
+    "Listing Agent",
+    _agent_options,
+    index=_agent_options.index(st.session_state.get("selected_agent", _agent_options[0])),
+    key="selected_agent",
+    help="Select an agent to use their personalized cover page.",
+)
+_cover_pdf_path = _agent_cover_map.get(selected_agent, "HC - CMA Cover Page Summer Pic.pdf")
+
 st.info(
     "📋 **What gets generated:**\n"
     "1. **HC Cover Page** (always included automatically)\n"
@@ -1480,6 +1494,7 @@ if generate:
                 anr_url=None,
                 supplemental_pdf_bytes=supp_bytes,
                 anr_pdf_bytes=anr_bytes,
+                cover_pdf_path=_cover_pdf_path,
             )
             st.session_state.pdf_bytes = pdf_bytes
             st.session_state.doc_bytes = None  # no DOCX in this flow
