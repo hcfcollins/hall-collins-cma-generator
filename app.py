@@ -1380,10 +1380,11 @@ st.markdown("---")
 st.markdown('<div class="section-label">Generate CMA Report</div>', unsafe_allow_html=True)
 
 # ── Agent selector ────────────────────────────────────────────────────────────
-_agent_options = ["— Default (Hall Collins) —", "Bekka Soule", "Rachel Noyes"]
+_agent_options = ["— Default (Hall Collins) —", "Bekka Soule", "Jenn Stickney", "Rachel Noyes"]
 _agent_cover_map = {
     "Rachel Noyes": "HC - Rachel Noyes CMA Cover Sheet.pdf",
     "Bekka Soule":  "HC - Bekka Soule CMA Cover Sheet.pdf",
+    "Jenn Stickney": "HC - Jennifer Cover Sheet.pdf",
 }
 selected_agent = st.selectbox(
     "Listing Agent",
