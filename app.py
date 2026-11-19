@@ -1011,10 +1011,21 @@ if _prop_type_now == "Land":
             if _checked:
                 _total_dev_value += _dval
 
+    # ── Custom per-acre valuation (optional override) ──────────────────────
+    st.markdown("**Per-Acre Valuation** *(optional — leave at $0 to use the default $1,000/acre)*")
+    _lsd["land_per_acre_override"] = st.number_input(
+        "Custom $ per acre",
+        min_value=0,
+        step=100,
+        value=int(_lsd.get("land_per_acre_override", 0) or 0),
+        key="land_per_acre_override",
+        help="If the agent wants a different per-acre rate than the default $1,000/acre, enter it here. Leave at 0 to use the default.",
+    )
+
     # ── Land price calculation ─────────────────────────────────────────────
     _land_acres   = float(_lsd.get("land_acres", 0))
     _land_base    = 35000
-    _land_per_acre = 1000
+    _land_per_acre = int(_lsd.get("land_per_acre_override", 0)) or 1000
     _land_acre_val = round(_land_acres * _land_per_acre)
 
     # Road frontage premium
@@ -1058,7 +1069,7 @@ if _prop_type_now == "Land":
     # Live preview
     _breakdown_rows = [
         ("Base land value (all parcels start here)", _land_base),
-        (f"Acreage value ({_land_acres:.1f} acres × $1,000/acre)", _land_acre_val),
+        (f"Acreage value ({_land_acres:.1f} acres × ${_land_per_acre:,}/acre)", _land_acre_val),
     ]
     if _road_premium:
         _breakdown_rows.append((f"Road frontage — {_lsd.get('land_road_frontage')}", _road_premium))
@@ -1098,7 +1109,7 @@ if _prop_type_now == "Land":
         </table>
         <div style="font-size:0.8rem;color:#999;margin-top:8px;font-style:italic;">
           Suggested range: <strong>${_land_low:,} – ${_land_high:,}</strong> · 
-          This model uses a $35,000 base + $1,000/acre + premiums for development, road access, and parcel character.
+          This model uses a $35,000 base + ${_land_per_acre:,}/acre + premiums for development, road access, and parcel character.
         </div>
         </div>
         """,
